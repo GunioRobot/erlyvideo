@@ -33,7 +33,8 @@
   body,
   session_id,
   sequence,
-  session
+  streams,
+  media
 }).
 
 
@@ -115,7 +116,7 @@ init([]) ->
 'WAIT_FOR_HEADERS'(end_of_headers, #rtsp_session{socket = Socket, content_length = undefined} = State) ->
   State1 = handle_request(State),
   inet:setopts(Socket, [{active, once}]),
-  {next_state, 'WAIT_FOR_REQUEST', State1, ?TIMEOUT};
+  {next_state, 'WAIT_FOR_REQUEST', State1};
   
 
 'WAIT_FOR_HEADERS'(end_of_headers, #rtsp_session{socket = Socket} = State) ->
@@ -131,18 +132,18 @@ init([]) ->
   State1 = decode_line(Message, State),
   State2 = handle_request(State1),
   inet:setopts(Socket, [{active, once}]),
-  {next_state, 'WAIT_FOR_REQUEST', State2, ?TIMEOUT};
+  {next_state, 'WAIT_FOR_REQUEST', State2};
 
 'WAIT_FOR_DATA'({data, Message}, #rtsp_session{bytes_read = BytesRead, socket = Socket} = State) ->
   NewBytesRead = BytesRead + size(Message),
   State1 = decode_line(Message, State),
   inet:setopts(Socket, [{active, once}]),
-  {next_state, 'WAIT_FOR_DATA', State1#rtsp_session{bytes_read = NewBytesRead}, ?TIMEOUT};
+  {next_state, 'WAIT_FOR_DATA', State1#rtsp_session{bytes_read = NewBytesRead}};
 
 
 'WAIT_FOR_DATA'(Message, State) ->
   ?D({"Message", Message}),
-  {next_state, 'WAIT_FOR_DATA', State, ?TIMEOUT}.
+  {next_state, 'WAIT_FOR_DATA', State}.
 
 
 split_params(String) ->
@@ -159,10 +160,10 @@ handle_request(#rtsp_session{request = [_Method, _URL], body = Body} = State) ->
 
 run_request(#rtsp_session{request = ['ANNOUNCE', _URL], body = Body} = State) ->
   Path = path(State),
-  Session = media_provider:open(Path, live),
+  Media = media_provider:open(Path, live),
   Streams = parse_announce(Body),
   ?D(Streams),
-  reply(State#rtsp_session{session = Session, session_id = 42}, "200 OK", []);
+  reply(State#rtsp_session{media = Media, session_id = 42, streams = Streams}, "200 OK", []);
 
 run_request(#rtsp_session{request = ['OPTIONS', _URL]} = State) ->
   reply(State, "200 OK", [{'Public', "SETUP, TEARDOWN, PLAY, PAUSE, RECORD, OPTIONS, DESCRIBE"}]);
@@ -170,16 +171,23 @@ run_request(#rtsp_session{request = ['OPTIONS', _URL]} = State) ->
 run_request(#rtsp_session{request = ['RECORD', _URL]} = State) ->
   reply(State, "200 OK", []);
 
-run_request(#rtsp_session{request = ['SETUP', _URL], headers = Headers, socket = Socket, session = Session} = State) ->
+run_request(#rtsp_session{request = ['SETUP', URL], headers = Headers, socket = Socket, streams = Streams, media = Media} = State) ->
+  {ok, Re} = re:compile("rtsp://([^/]*)/(.*)/trackid=(\\d+)"),
+  {match, [_, _Host, _Path, TrackIdS]} = re:run(URL, Re, [{capture, all, list}]),
+  TrackId = list_to_integer(TrackIdS),
   Transport = proplists:get_value('Transport', Headers),
   TransportOpts = split_params(Transport),
-  ?D({"Transport", TransportOpts}),
   ClientPorts = string:tokens(proplists:get_value("client_port", TransportOpts), "-"),
   ClientPort = list_to_integer(hd(ClientPorts)),
   {ok, {Address, _}} = inet:peername(Socket),
-  rtp_server:register(Address, ClientPort, Session),
-  {ok, {RTCP, RTP}} = rtp_server:port(),
-  ReplyHeaders = [{"Transport", io_lib:format("~s;server_port=~p-~p",[Transport, RTCP, RTP])}],
+  
+  Stream = hd(lists:filter(fun(S) ->
+    lists:member({track_id, TrackId}, S)
+  end, Streams)),
+  
+  rtp_server:register({Address, ClientPort}, Media, Stream),
+  {ok, {RTP, RTCP}} = rtp_server:port(),
+  ReplyHeaders = [{"Transport", io_lib:format("~s;server_port=~p-~p",[Transport, RTP, RTCP])}],
   reply(State, "200 OK", ReplyHeaders);
 
 run_request(#rtsp_session{request = [_Method, _URL]} = State) ->
@@ -224,7 +232,8 @@ path(#rtsp_session{url_re = UrlRe, request = [_, URL]}) ->
   {match, [_, _Host, Path]} = re:run(URL, UrlRe, [{capture, all, binary}]),
   Path.
   
-parse_announce(Announce) -> parse_announce(Announce, [], undefined).
+parse_announce(Announce) -> 
+  parse_announce(Announce, [], undefined).
 
 parse_announce([], Streams, undefined) ->
   Streams;
@@ -256,14 +265,24 @@ parse_announce([{m, Info} | Announce], Streams, Stream) when is_list(Stream) ->
 parse_announce([{m, Info} | Announce], Streams, undefined) ->
   [TypeS, _, "RTP/AVP", S] = string:tokens(binary_to_list(Info), " "),
   Type = binary_to_existing_atom(list_to_binary(TypeS), latin1),
-  parse_announce(Announce, Streams, [{type, Type}, {stream_id, list_to_integer(S)}]);
+  parse_announce(Announce, Streams, [{type, Type}, {payload_type, list_to_integer(S)}]);
 
 parse_announce([{b, Info} | Announce], Streams, Stream) when is_list(Stream) ->
   ["AS", S] = string:tokens(binary_to_list(Info), ":"),
   parse_announce(Announce, Streams, [{bitrate, list_to_integer(S)} | Stream]);
 
-parse_announce([{a, <<"rtpmap:", _Info/binary>>} | Announce], Streams, Stream) when is_list(Stream) ->
-  parse_announce(Announce, Streams, Stream);
+parse_announce([{a, <<"rtpmap:", Info/binary>>} | Announce], Streams, Stream) when is_list(Stream) ->
+  {ok, Re} = re:compile("\\d+ [^/]+/(\\d+)"),
+  {match, [_, ClockMap]} = re:run(Info, Re, [{capture, all, list}]),
+  parse_announce(Announce, Streams, [{clock_map, list_to_integer(ClockMap)} | Stream]);
+
+parse_announce([{a, <<"cliprect:", Info/binary>>} | Announce], Streams, Stream) when is_list(Stream) ->
+  [_,_,Width, Height] = string:tokens(binary_to_list(Info), ","),
+  parse_announce(Announce, Streams, [{height, list_to_integer(Height)} | [{width, list_to_integer(Width)} | Stream]]);
+
+parse_announce([{a, <<"control:trackid=", Track/binary>>} | Announce], Streams, Stream) when is_list(Stream) ->
+  TrackId = list_to_integer(binary_to_list(Track)),
+  parse_announce(Announce, Streams, [{track_id, TrackId} | Stream]);
 
 parse_announce([{a, <<"fmtp:", Info/binary>>} | Announce], Streams, Stream) when is_list(Stream) ->
   {ok, Re} = re:compile("([^=]+)=(.*)"),
