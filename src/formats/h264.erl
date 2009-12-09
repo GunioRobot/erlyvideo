@@ -106,16 +106,20 @@ decode_nal(<<0:1, _NRI:2, ?NAL_STAR_A:5, Rest/binary>>, H264) ->
   decode_stara(Rest, [], H264);
 
 decode_nal(<<0:1, _NRI:2, ?NAL_STAR_B:5, Rest/binary>>, H264) ->
-  error(h264_star_b_unsupported);
+%  error(h264_star_b_unsupported);
+  {error, "h264_star_b_unsupported"};
 
 decode_nal(<<0:1, _NRI:2, ?NAL_MTAP16:5, Rest/binary>>, H264) ->
-  error(h264_mtap16_unsupported);
+%  error(h264_mtap16_unsupported);
+  {error, "h264_mtap16_unsupported"};
 
 decode_nal(<<0:1, _NRI:2, ?NAL_MTAP24:5, Rest/binary>>, H264) ->
-  error(h264_mtap24_unsupported);
+%  error(h264_mtap24_unsupported);
+  {error, "h264_mtap24_unsupported"};
 
 decode_nal(<<0:1, _NRI:2, ?NAL_FUB:5, Rest/binary>>, H264) ->
-  error(h264_fub_unsupported);
+%  error(h264_fub_unsupported);
+  {error, "h264_fub_unsupported"};
 
 
 %          <<0:1, _NRI:2, ?NAL_FUA:5, Start:1, End:1, Type:6,  _Rest/binary>>
