@@ -17,11 +17,13 @@
   media,
   clock_map,
   sequence = 0,
-  timestamp,
+  timestamp = undefined,
   width,
   height,
   payload_type,
-  h264
+  h264,
+  buffer = [],
+  last_frame
 }).
 	
 -behaviour(gen_server).
@@ -129,14 +131,30 @@ handle_cast(_Msg, State) ->
 %% @end
 %% @private
 %%-------------------------------------------------------------------------
+% 
+%  0                   1                   2                   3
+%  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+%  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+%  |V=2|P|X|  CC   |M|     PT      |       sequence number         |
+%  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+%  |                           timestamp                           |
+%  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+%  |           synchronization source (SSRC) identifier            |
+%  +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+%  |            contributing source (CSRC) identifiers             |
+%  |                             ....                              |
+%  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
-handle_info({udp,Socket,Host,Port, <<2:2, _Padding:1, _Extension:1, 0:4, _Marker:1, PayloadType:7, 
-         Sequence:16, Timestamp:32, _StreamId:32, Body/binary>>}, #rtp_server{streams = StreamTable} = State) ->
+handle_info({udp,Socket,Host,Port, <<2:2, 0:1, _Extension:1, 0:4, Marker:1, PayloadType:7, 
+         Sequence:16, Timestamp:32, _StreamId:32, Body/binary>> = _Bin}, #rtp_server{streams = StreamTable} = State) ->
   % ?D({"UDP message", Host, Port, size(Bin)}),
+  % ?D({"UDP", _Marker, Timestamp, Sequence}),
   % {ok, {Address, Local}} = inet:sockname(Socket),
   case ets:match_object(StreamTable, {{Host, Port}, '_'}) of
-    [{_, Decoder}] -> Decoder ! {data, Body, Sequence, Timestamp, PayloadType};
-    _ -> ?D({"Unknown payload", Host, Port})
+    [{_, Decoder}] -> Decoder ! {data, Body, Sequence, Timestamp, PayloadType, Marker};
+    _ -> 
+      % ?D({"Unknown payload", Host, Port}),
+      ok
   end,
   inet:setopts(Socket, [{active, once}]),
   {noreply, State};
@@ -163,41 +181,57 @@ video(Media, Stream) ->
   Width = proplists:get_value(width, Stream),
   Height = proplists:get_value(height, Stream),
   PayloadType = proplists:get_value(payload_type, Stream),
-  Video = #video{media = Media, clock_map = ClockMap, h264 = #h264{}, 
+  [SPS, PPS] = proplists:get_value(parameter_sets, Stream),
+  H264 = #h264{},
+  {H264_1, _} = h264:decode_nal(SPS, H264),
+  {H264_2, Configs} = h264:decode_nal(PPS, H264_1),
+  
+  Video = #video{media = Media, clock_map = ClockMap, h264 = H264_2,
                  width = Width, height = Height, payload_type = PayloadType},
   link(Media),
-  ?D({"Starting rtp video", Video}),
+  
+  lists:foreach(fun(Frame) ->
+    Media ! Frame#video_frame{timestamp = 0}
+  end, Configs),
+  
   video(Video).
   
-video(#video{payload_type = PayloadType, h264 = H264, clock_map = ClockMap, media = Media} = Video) ->
+video(Video) ->
   receive
-    {data, Body, Sequence, Timestamp, PayloadType} ->
-      {H264_1, Frames} = h264:decode_nal(Body, H264),
-      lists:foreach(fun(Frame) ->
-        ?D({"H264 Frame", Frame#video_frame.frame_type, Frame#video_frame.decoder_config}),
-        Media ! Frame#video_frame{timestamp = Timestamp / ClockMap}
-      end, Frames),
-      
-      ?MODULE:video(Video#video{sequence = Sequence + 1, timestamp = Timestamp, h264 = H264_1});
+    {data, _, _, _, _, _} = Packet ->
+      read_video(Video, Packet);
     Else ->
-      ?D({"Unknown", Else})
+      ?D({"Unknown", Else}),
+      ok
   after
     50000 ->
       ?D("RTP video timeout")
   end.
   
 
-% Version:2, Padding:1, Extension:1, CSRC:4, Marker:1, PayloadType:7, Sequence:16, Timestamp:32, StreamId:32, Other
-% decode(<<2:2, _Padding:1, _Extension:1, 0:4, Marker:1, PayloadType:7, Sequence:16, Timestamp:32, StreamId:32, Rest/binary>>, Handler, Streams) ->
-%   VideoFrame = #video_frame{body = Rest},
-%   case lists:keyfind(PayloadType, 1, Streams) of
-%     {PayloadType, audio, ClockMap, Stream} ->
-%       % ?D({audio, Timestamp / ClockMap, size(Rest)}),
-%       Handler ! VideoFrame#video_frame{timestamp = Timestamp / ClockMap, type = ?FLV_TAG_TYPE_AUDIO, codec_id = ?FLV_AUDIO_FORMAT_AAC},
-%       Streams;
-%   end.
+read_video(#video{timestamp = undefined} = Video, {data, _, _, Timestamp, _, _} = Packet) ->
+  read_video(Video#video{timestamp = Timestamp}, Packet);
 
+read_video(#video{payload_type = PayloadType, h264 = H264, clock_map = ClockMap, media = Media, buffer = Buffer, timestamp = Timestamp, last_frame = PrevFrame} = Video, {data, Body, Sequence, Timestamp, PayloadType, Marker}) ->
+  {H264_1, Frames} = h264:decode_nal(Body, H264),
+  NAL = lists:map(fun(#video_frame{body = N}) -> N end, Frames),
+  LastFrame = case Frames of
+    [] -> PrevFrame;
+    [Frame | _] -> Frame
+  end,
+  ?MODULE:video(Video#video{sequence = Sequence + 1, h264 = H264_1, buffer = Buffer ++ NAL, last_frame = LastFrame});
   
+read_video(#video{payload_type = PayloadType, h264 = H264, clock_map = ClockMap, media = Media, buffer = Buffer, timestamp = RtpTs, last_frame = Frame} = Video, {data, Body, Sequence, NewRtpTs, PayloadType, Marker}) ->
+
+  {H264_1, Frames} = h264:decode_nal(Body, H264),
+
+  % ?D({round(RtpTs / ClockMap), Frame#video_frame.frame_type}),
+  Media ! Frame#video_frame{timestamp = round(RtpTs / ClockMap), body = iolist_to_binary(Buffer)},
+  
+  NAL = lists:map(fun(#video_frame{body = N}) -> N end, Frames),
+  ?MODULE:video(Video#video{sequence = Sequence + 1, h264 = H264_1, buffer = NAL, timestamp = NewRtpTs}).
+  
+
 %%-------------------------------------------------------------------------
 %% @spec (Reason, State) -> any
 %% @doc  Callback executed on server shutdown. It is only invoked if

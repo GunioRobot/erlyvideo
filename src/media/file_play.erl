@@ -186,6 +186,10 @@ play(Else) ->
 send_frame(Player, undefined) ->
   self() ! play,
   ?MODULE:ready(Player);
+
+send_frame(Player, #video_frame{body = undefined}) ->
+  self() ! play,
+  ?MODULE:ready(Player);
   
 send_frame(#file_player{consumer = Consumer, stream_id = StreamId}, done) ->
   gen_fsm:send_event(Consumer, {status, ?NS_PLAY_COMPLETE, StreamId}),
@@ -213,6 +217,7 @@ file_format(Name) ->
   case filename:extension(Name) of
       ".flv" -> flv;
       ".FLV" -> flv;
+      ".3gp" -> mp4;
       ".mp4" -> mp4;
       ".MP4" -> mp4;
       ".mov" -> mp4;
