@@ -82,6 +82,8 @@
 	peer_port,					% peer port | undefined
 	connection = keep_alive,	% keep_alive | close
 	content_length,				% Integer
+	host,
+	socket,
 	vsn,						% {Maj,Min}
 	method,						% 'GET'|'POST'
 	uri,						% Truncated URI /index.html

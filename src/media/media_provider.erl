@@ -8,13 +8,14 @@
 -behaviour(gen_server).
 
 %% External API
--export([start_link/0, create/2, open/2, play/1, play/2, entries/0, remove/1]).
+-export([start_link/1, create/3, open/2, open/3, play/3, entries/1, remove/2, find/2]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 -record(media_provider, {
   opened_media,
+  host,
   counter = 1
 }).
 
@@ -23,49 +24,61 @@
   handler
 }).
 
+name(Host) ->
+  binary_to_atom(<<"media_provider_", (atom_to_binary(Host, latin1))/binary>>, latin1).
 
-start_link() ->
-  gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+start_link(Host) ->
+  gen_server:start_link({local, name(Host)}, ?MODULE, [Host], []).
 
-create(Name, Type) ->
+create(Host, Name, Type) ->
   ?D({"Create", Name, Type}),
-  Pid = open(Name, Type),
+  Pid = open(Host, Name, Type),
   stream_media:set_owner(Pid, self()),
   Pid.
 
-open(Name) ->
-  gen_server:call(?MODULE, {open, Name}).
+open(Host, Name) when is_list(Name)->
+  open(Host, list_to_binary(Name));
 
-open(Name, Type) ->
-  gen_server:call(?MODULE, {open, Name, Type}).
+open(Host, Name) ->
+  gen_server:call(name(Host), {open, Name}).
 
-find(Name) ->
-  gen_server:call(?MODULE, {find, Name}).
+open(Host, Name, Type) when is_list(Name)->
+  open(Host, list_to_binary(Name), Type);
 
-entries() ->
-  gen_server:call(?MODULE, entries).
+open(Host, Name, Type) ->
+  gen_server:call(name(Host), {open, Name, Type}).
+
+find(Host, Name) when is_list(Name)->
+  find(Host, list_to_binary(Name));
+
+find(Host, Name) ->
+  gen_server:call(name(Host), {find, Name}).
   
-remove(Name) ->
-  gen_server:cast(?MODULE, {remove, Name}).
 
+entries(Host) ->
+  gen_server:call(name(Host), entries).
+  
+remove(Host, Name) ->
+  gen_server:cast(name(Host), {remove, Name}).
 
-% Plays media with default options
-play(Name) -> play(Name, []).
 
 % Plays media named Name
+% Required options:
+%   stream_id: for RTMP, FLV stream id
+%
 % Valid options:
 %   consumer: pid of media consumer
-%   stream_id: for RTMP, FLV stream id
-%  client_buffer: client buffer size
-play(Name, Options) ->
-  case find_or_open(Name) of
+%   client_buffer: client buffer size
+%
+play(Host, Name, Options) ->
+  case find_or_open(Host, Name) of
     {notfound, Reason} -> {notfound, Reason};
     MediaEntry -> create_player(MediaEntry, Options)
   end.
   
-find_or_open(Name) ->
-  case find(Name) of
-    undefined -> open(Name);
+find_or_open(Host, Name) ->
+  case find(Host, Name) of
+    undefined -> open(Host, Name);
     MediaEntry -> MediaEntry
   end.
 
@@ -78,11 +91,11 @@ create_player(MediaEntry, Options) ->
   
   
 
-init([]) ->
+init([Host]) ->
   process_flag(trap_exit, true),
   % error_logger:info_msg("Starting with file directory ~p~n", [Path]),
   OpenedMedia = ets:new(opened_media, [set, private, {keypos, #media_entry.name}]),
-  {ok, #media_provider{opened_media = OpenedMedia}}.
+  {ok, #media_provider{opened_media = OpenedMedia, host = Host}}.
   
 
 
@@ -103,8 +116,8 @@ init([]) ->
 handle_call({find, Name}, _From, MediaProvider) ->
   {reply, find_in_cache(Name, MediaProvider), MediaProvider};
   
-handle_call({open, Name}, {_Opener, _Ref}, MediaProvider) ->
-  {reply, open_media_entry(detect_type(Name), MediaProvider), MediaProvider};
+handle_call({open, Name}, {_Opener, _Ref}, #media_provider{host = Host} = MediaProvider) ->
+  {reply, open_media_entry(detect_type(Host, Name), MediaProvider), MediaProvider};
 
 handle_call({open, Name, Type}, {_Opener, _Ref}, MediaProvider) ->
   {reply, open_media_entry({Name, Type}, MediaProvider), MediaProvider};
@@ -140,10 +153,10 @@ find_in_cache(Name, #media_provider{opened_media = OpenedMedia}) ->
 open_media_entry({Name, notfound}, _) ->
   {notfound, <<"No file ", Name/binary>>};
 
-open_media_entry({Name, Type}, #media_provider{opened_media = OpenedMedia} = MediaProvider) ->
+open_media_entry({Name, Type}, #media_provider{host = Host, opened_media = OpenedMedia} = MediaProvider) ->
   case find_in_cache(Name, MediaProvider) of
     undefined ->
-      case ems_sup:start_media(Name, Type) of
+      case ems_sup:start_media(Name, Type, [{host, Host}]) of
         {ok, Pid} ->
           link(Pid),
           ets:insert(OpenedMedia, #media_entry{name = Name, handler = Pid}),
@@ -156,46 +169,46 @@ open_media_entry({Name, Type}, #media_provider{opened_media = OpenedMedia} = Med
       MediaEntry
   end.
   
-detect_type(Name) ->
-  detect_mpeg_ts(Name).
+detect_type(Host, Name) ->
+  detect_mpeg_ts(Host, Name).
 
-detect_mpeg_ts(Name) ->
+detect_mpeg_ts(Host, Name) ->
   {ok, Re} = re:compile("http://(.*)"),
   case re:run(Name, Re) of
     {match, _Captured} -> {Name, mpeg_ts};
-    _ -> detect_file(Name)
+    _ -> detect_file(Host, Name)
   end.
 
-detect_file(Name) ->
-  case check_path(Name) of
+detect_file(Host, Name) ->
+  case check_path(Host, Name) of
     true -> {Name, file};
-    _ -> detect_prefixed_file(Name)
+    _ -> detect_prefixed_file(Host, Name)
   end.
 
-detect_prefixed_file(<<"flv:", Name/binary>>) ->
-  case check_path(Name) of
+detect_prefixed_file(Host, <<"flv:", Name/binary>>) ->
+  case check_path(Host, Name) of
     true -> {Name, file};
     _ -> {Name, notfound}
   end;
 
-detect_prefixed_file(<<"mp4:", Name/binary>>) ->
-  case check_path(Name) of
+detect_prefixed_file(Host, <<"mp4:", Name/binary>>) ->
+  case check_path(Host, Name) of
     true -> 
       ?D({"File found", Name}),
       {Name, file};
     _ -> {Name, notfound}
   end;
   
-detect_prefixed_file(Name) ->
+detect_prefixed_file(_Host, Name) ->
   {Name, notfound}.
 
 
 
-check_path(Name) when is_binary(Name) ->
-  check_path(binary_to_list(Name));
+check_path(Host, Name) when is_binary(Name) ->
+  check_path(Host, binary_to_list(Name));
 
-check_path(Name) ->
-  filelib:is_regular(filename:join([file_play:file_dir(), Name])).
+check_path(Host, Name) ->
+  filelib:is_regular(filename:join([file_play:file_dir(Host), Name])).
 
 %%-------------------------------------------------------------------------
 %% @spec (Msg, State) ->{noreply, State}          |

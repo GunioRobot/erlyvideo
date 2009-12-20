@@ -8,7 +8,7 @@
 -define(RTMP_PORT,     1935).
 -define(TIMEOUT,     120000).
 -define(RTMP_TIMEOUT,     120000).
--define(RTMP_WINDOW_SIZE, 100000).
+-define(RTMP_WINDOW_SIZE, 2500000).
 -define(HS_HEADER,        3).
 -define(HS_BODY_LEN,   1536).
 -define(MIN_CLIENT_BUFFER, 100).
@@ -178,6 +178,8 @@
 
 
 -record(rtmp_session, {
+  host,
+  path,
 	socket,    % client socket
 	addr,      % client address
 	port,
@@ -252,3 +254,10 @@
 	stream_id = 0,
 	type 	= invoke %if invoke then id, otherwise notify
 	}).
+
+-record(so_message, {
+  name,
+  version,
+  persistent,
+  events = []
+}).

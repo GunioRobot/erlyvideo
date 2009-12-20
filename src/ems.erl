@@ -38,9 +38,10 @@
 -include("../include/ems.hrl").
 
 -export([start/0,stop/0,restart/0,rebuild/0,reload/0]).
--export([get_var/1,get_var/2, check_app/3, try_method_chain/2]).
+-export([get_var/2, get_var/3, check_app/3, try_method_chain/3, respond_to/3]).
 -export([start_modules/0, stop_modules/0]).
 -export([call_modules/2]).
+-export([host/1]).
 
 
 %%--------------------------------------------------------------------
@@ -115,13 +116,6 @@ reload([H|T]) ->
 	
 	
 %%--------------------------------------------------------------------
-%% @spec (Opt::atom()) -> any()
-%% @doc Gets application enviroment variable. User defined varaibles in 
-%% .config file override application default varabiles. Default [].
-%% @end 
-%%--------------------------------------------------------------------
-get_var(Opt) -> get_var(Opt, []).
-%%--------------------------------------------------------------------
 %% @spec (Opt::atom(), Default::any()) -> any()
 %% @doc Gets application enviroment variable. Returns Default if no 
 %% varaible named Opt is found. User defined varaibles in .config file
@@ -143,12 +137,28 @@ get_var(Opt, Default) ->
 	end.
 
 
+get_var(Key, Host, Default) ->
+  case ets:match_object(vhosts, {{host(Host), Key}, '$1'}) of
+    [{{Hostname, Key}, Value}] -> Value;
+    [] -> Default
+  end.
+
+
 respond_to(Module, Command, Arity) ->
   case code:ensure_loaded(Module) of
 		{module, Module} -> 
 		  lists:member({Command, Arity}, Module:module_info(exports));
 		_ -> false
 	end.
+  
+  
+host(Hostname) when is_binary(Hostname) -> host(binary_to_list(Hostname));
+host(Hostname) when is_atom(Hostname) -> Hostname;
+host(Hostname) -> 
+  case ets:match_object(vhosts, {Hostname, '$1'}) of
+    [{Hostname, Host}] -> Host;
+    [] -> default
+  end.
   
 
 %%--------------------------------------------------------------------
@@ -187,8 +197,8 @@ stop_modules() -> call_modules(stop, []).
 %% @end 
 %%--------------------------------------------------------------------
 
-try_method_chain(Method, Args) ->
-  try_method_chain(ems:get_var(applications, ['apps_rtmp']), Method, Args).
+try_method_chain(Host, Method, Args) when is_atom(Host) ->
+  try_method_chain(ems:get_var(applications, Host, ['apps_rtmp']), Method, Args);
 
 try_method_chain([], _Method, _Args) ->
   {unhandled};
@@ -208,7 +218,10 @@ try_method_chain([Module | Applications], Method, Args) ->
 %% @doc Look whan module in loaded plugins can handle required method
 %% @end 
 %%--------------------------------------------------------------------
-	
+
+check_app(_, connect, _) ->
+  apps_rtmp;
+  
 check_app([], _Command, _Arity) ->
   unhandled;
 
@@ -219,8 +232,8 @@ check_app([Module | Applications], Command, Arity) ->
   end;
 
 
-check_app(#rtmp_session{} = _State, Command, Arity) ->
-  Applications = ems:get_var(applications, ['apps_rtmp']),
+check_app(#rtmp_session{host = Host} = _State, Command, Arity) ->
+  Applications = ems:get_var(applications, Host, ['apps_rtmp']),
   check_app(Applications, Command, Arity).
 
 

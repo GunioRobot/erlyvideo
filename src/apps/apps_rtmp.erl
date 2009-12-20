@@ -50,23 +50,30 @@
 connect(AMF, #rtmp_session{window_size = WindowAckSize} = State) ->
     
     Channel = #channel{id = 2, timestamp = 0, msg = <<>>},
-		gen_fsm:send_event(self(), {send, {Channel#channel{type = ?RTMP_TYPE_WINDOW_ACK_SIZE}, <<WindowAckSize:32>>}}),
-		gen_fsm:send_event(self(), {send, {Channel#channel{type = ?RTMP_TYPE_BW_PEER}, <<0,16#26, 16#25,16#a0, 16#02>>}}),
+    % gen_fsm:send_event(self(), {invoke, AMF#amf{command = 'onBWDone', type = invoke, id = 2, stream_id = 0, args = [null]}}),
+    rtmp_session:send(State, {Channel#channel{type = ?RTMP_TYPE_WINDOW_ACK_SIZE}, <<WindowAckSize:32>>}),
+    rtmp_session:send(State, {Channel#channel{type = ?RTMP_TYPE_BW_PEER}, <<WindowAckSize:32, 16#02>>}),
+    'WAIT_FOR_DATA'({control, ?RTMP_CONTROL_STREAM_BEGIN, 0}, State),
+    gen_fsm:send_event(self(), {send, {#channel{timestamp = 0, id = 2, type = ?RTMP_TYPE_CHUNK_SIZE}, ?RTMP_PREF_CHUNK_SIZE}}),
 		
 	  [{object, PlayerInfo} | AuthInfo] = AMF#amf.args,
 	  _FlashVer = proplists:get_value(flashVer, PlayerInfo),
 	  _SwfUrl = proplists:get_value(swfUrl, PlayerInfo),
-	  _TcUrl = proplists:get_value(tcUrl, PlayerInfo),
+	  ConnectUrl = proplists:get_value(tcUrl, PlayerInfo),
 	  _Fpad = proplists:get_value(fpad, PlayerInfo),
 	  _AudioCodecs = round(proplists:get_value(audioCodecs, PlayerInfo, 0)),
 	  _VideoCodecs = proplists:get_value(videoCodecs, PlayerInfo),
 	  _VideoFunction = proplists:get_value(videoFunction, PlayerInfo),
 	  _PageUrl = proplists:get_value(pageUrl, PlayerInfo),
 
-    ?D({"CONNECT", _PageUrl}),
-		NewState1 =	State#rtmp_session{player_info = PlayerInfo, previous_ack = erlang:now()},
+    {ok, UrlRe} = re:compile("(.*)://([^/]+)/?(.*)$"),
+    {match, [_, _Proto, HostName, Path]} = re:run(ConnectUrl, UrlRe, [{capture, all, binary}]),
+    Host = ems:host(HostName),
+    
+    ?D({"CONNECT", Host, _PageUrl}),
+		NewState1 =	State#rtmp_session{player_info = PlayerInfo, previous_ack = erlang:now(), host = Host, path = Path},
 
-    AuthModule = ems:get_var(auth_module, trusted_login),
+    AuthModule = ems:get_var(auth_module, Host, trusted_login),
     NewState2 = AuthModule:client_login(NewState1, AuthInfo),
     
     NewState3 = case lists:keyfind(objectEncoding, 1, PlayerInfo) of
@@ -79,10 +86,11 @@ connect(AMF, #rtmp_session{window_size = WindowAckSize} = State) ->
       _ -> NewState2#rtmp_session{amf_version = 0}
     end,
     
-    ConnectObj = [{capabilities, 31}, {fmsVer, <<"Erlyvideo 1.0">>}],
-    StatusObj = [{code, <<?NC_CONNECT_SUCCESS>>},
-                 {level, <<"status">>}, 
+    ConnectObj = [{fmsVer, <<"FMS/3,0,1,123">>}, {capabilities, 31}],
+    StatusObj = [{level, <<"status">>}, 
+                 {code, <<?NC_CONNECT_SUCCESS>>},
                  {description, <<"Connection succeeded.">>},
+                 {clientid, 1716786930},
                  {objectEncoding, NewState3#rtmp_session.amf_version}],
     reply(AMF#amf{args = [{object, ConnectObj}, {object, StatusObj}]}),
     NewState3.
@@ -98,7 +106,7 @@ fail(AMF) ->
 
 
 'WAIT_FOR_DATA'({control, Type, Stream}, State) ->
-  gen_fsm:send_event(self(), {send, {#channel{id = 2, timestamp = 0, type = ?RTMP_TYPE_CONTROL}, <<Type:16/big, Stream:32/big>>}}),
+  rtmp_session:send(State, {#channel{id = 2, timestamp = 0, type = ?RTMP_TYPE_CONTROL}, <<Type:16/big, Stream:32/big>>}),
   {next_state, 'WAIT_FOR_DATA', State, ?TIMEOUT};
 
 
@@ -120,11 +128,11 @@ fail(AMF) ->
 'WAIT_FOR_DATA'({status, Code}, State) -> 'WAIT_FOR_DATA'({status, Code, 0, "-"}, State);
 
 'WAIT_FOR_DATA'({invoke, #amf{stream_id = StreamId} = AMF}, #rtmp_session{amf_version = 0} = State) ->
-  gen_fsm:send_event(self(), {send, {#channel{id = 16, timestamp = 0, type = ?RTMP_INVOKE_AMF0, stream_id = StreamId}, AMF}}),
+  gen_fsm:send_event(self(), {send, {#channel{id = 3, timestamp = 0, type = ?RTMP_INVOKE_AMF0, stream_id = StreamId}, AMF}}),
   {next_state, 'WAIT_FOR_DATA', State, ?TIMEOUT};
 
 'WAIT_FOR_DATA'({invoke, #amf{stream_id = StreamId} = AMF}, #rtmp_session{amf_version = 3} = State) ->
-  gen_fsm:send_event(self(), {send, {#channel{id = 16, timestamp = 0, type = ?RTMP_INVOKE_AMF0, stream_id = StreamId}, AMF}}),
+  gen_fsm:send_event(self(), {send, {#channel{id = 3, timestamp = 0, type = ?RTMP_INVOKE_AMF0, stream_id = StreamId}, AMF}}),
   {next_state, 'WAIT_FOR_DATA', State, ?TIMEOUT};
 
 

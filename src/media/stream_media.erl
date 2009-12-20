@@ -9,14 +9,14 @@
 -behaviour(gen_server).
 
 %% External API
--export([start_link/2, codec_config/2, metadata/1, publish/2, set_owner/2]).
+-export([start_link/3, codec_config/2, metadata/1, publish/2, set_owner/2]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 
-start_link(Path, Type) ->
-   gen_server:start_link(?MODULE, [Path, Type], []).
+start_link(Path, Type, Opts) ->
+   gen_server:start_link(?MODULE, [Path, Type, Opts], []).
    
 metadata(Server) ->
   gen_server:call(Server, {metadata}).
@@ -33,20 +33,22 @@ set_owner(Server, Owner) ->
   gen_server:call(Server, {set_owner, Owner}).
   
 
-init([Name, live]) ->
+init([Name, live, Opts]) ->
+  Host = proplists:get_value(host, Opts),
   process_flag(trap_exit, true),
-  error_logger:info_msg("Live streaming stream ~p~n", [Name]),
+  error_logger:info_msg("Stream media ~p ~p~n", [Host, Name]),
   Clients = [],
   % Header = flv:header(#flv_header{version = 1, audio = 1, video = 1}),
-	Recorder = #media_info{type=live, name = Name, clients = Clients},
+	Recorder = #media_info{type=live, name = Name, host = Host, clients = Clients},
 	{ok, Recorder, ?TIMEOUT};
 
 
-init([Name, record]) ->
+init([Name, record, Opts]) ->
+  Host = proplists:get_value(host, Opts),
   process_flag(trap_exit, true),
   error_logger:info_msg("Recording stream ~p~n", [Name]),
   Clients = [],
-	FileName = filename:join([file_play:file_dir(), binary_to_list(Name)]),
+	FileName = filename:join([file_play:file_dir(Host), binary_to_list(Name)]),
 	(catch file:delete(FileName)),
 	ok = filelib:ensure_dir(FileName),
 	Header = flv:header(#flv_header{version = 1, audio = 1, video = 1}),
@@ -54,7 +56,7 @@ init([Name, record]) ->
 	case file:open(FileName, [write, {delayed_write, 1024, 50}]) of
 		{ok, Device} ->
 		  file:write(Device, Header),
-		  Recorder = #media_info{type=record, device = Device, name = Name, path = FileName, clients = Clients},
+		  Recorder = #media_info{type=record, host = Host, device = Device, name = Name, path = FileName, clients = Clients},
 			{ok, Recorder, ?TIMEOUT};
 		_Error ->
 		  error_logger:error_msg("Failed to start recording stream to ~p because of ~p", [FileName, _Error]),
@@ -76,10 +78,10 @@ init([Name, record]) ->
 %% @private
 %%-------------------------------------------------------------------------
 
-handle_call({create_player, Options}, _From, #media_info{name = Name, clients = Clients} = MediaInfo) ->
+handle_call({create_player, Options}, _From, #media_info{name = Name, clients = Clients, gop = GOP} = MediaInfo) ->
   {ok, Pid} = ems_sup:start_stream_play(self(), Options),
   link(Pid),
-  ?D({"Creating media player for", Name, "client", proplists:get_value(consumer, Options)}),
+  ?D({"Creating media player for", MediaInfo#media_info.host, Name, "client", proplists:get_value(consumer, Options)}),
   case MediaInfo#media_info.video_decoder_config of
     undefined -> ok;
     VideoConfig -> Pid ! VideoConfig
@@ -88,6 +90,7 @@ handle_call({create_player, Options}, _From, #media_info{name = Name, clients = 
     undefined -> ok;
     AudioConfig -> Pid ! AudioConfig
   end,
+  lists:foreach(fun(Frame) -> Pid ! Frame end, lists:reverse(GOP)),
   {reply, {ok, Pid}, MediaInfo#media_info{clients = [Pid | Clients]}, ?TIMEOUT};
 
 handle_call(clients, _From, #media_info{clients = Clients} = MediaInfo) ->
@@ -199,21 +202,22 @@ handle_info(#video_frame{decoder_config = true, type = ?FLV_TAG_TYPE_VIDEO} = Fr
 
 handle_info(#video_frame{} = Frame, #media_info{clients = Clients} = MediaInfo) ->
   lists:foreach(fun(Client) -> Client ! Frame end, Clients),
-  {noreply, MediaInfo, ?TIMEOUT};
+  {noreply, store_last_gop(MediaInfo, Frame), ?TIMEOUT};
 
 handle_info(start, State) ->
   {noreply, State, ?TIMEOUT};
 
-handle_info(stop, #media_info{name = Name} = MediaInfo) ->
-  media_provider:remove(Name),
+handle_info(stop, #media_info{host = Host, name = Name} = MediaInfo) ->
+  error_logger:info_msg("Stopping stream media ~p ~p~n", [Host, Name]),
+  media_provider:remove(Host, Name),
   {noreply, MediaInfo, ?TIMEOUT};
 
-handle_info(exit, #media_info{name = Name} = State) ->
-  media_provider:remove(Name),
+handle_info(exit, #media_info{host = Host, name = Name} = State) ->
+  media_provider:remove(Host, Name),
   {noreply, State, ?TIMEOUT};
 
-handle_info(timeout, #media_info{name = Name} = State) ->
-  media_provider:remove(Name),
+handle_info(timeout, #media_info{host = Host, name = Name} = State) ->
+  media_provider:remove(Host, Name),
   {stop, normal, State};
 
 handle_info(pause, State) ->
@@ -223,8 +227,23 @@ handle_info(resume, State) ->
   {noreply, State, ?TIMEOUT};
 
 handle_info(_Info, State) ->
-  ?D({"Undefined info", _Info}),
+  ?D({"Undefined info", _Info, State}),
   {noreply, State, ?TIMEOUT}.
+
+store_last_gop(MediaInfo, #video_frame{type = ?FLV_TAG_TYPE_VIDEO, frame_type = ?FLV_VIDEO_FRAME_TYPE_KEYFRAME} = Frame) ->
+  ?D({"New GOP", Frame#video_frame.timestamp}),
+  MediaInfo#media_info{gop = [Frame]};
+
+store_last_gop(#media_info{gop = GOP} = MediaInfo, _) when length(GOP) == 5000 ->
+  ?D({"GOP longer than 5000 frames"}),
+  MediaInfo#media_info{gop = []};
+
+store_last_gop(#media_info{gop = GOP} = MediaInfo, Frame) when is_list(GOP) ->
+  MediaInfo#media_info{gop = [Frame | GOP]};
+
+  
+store_last_gop(MediaInfo, _) ->
+  MediaInfo.
 
 %%-------------------------------------------------------------------------
 %% @spec (Reason, State) -> any
@@ -234,9 +253,8 @@ handle_info(_Info, State) ->
 %% @end
 %% @private
 %%-------------------------------------------------------------------------
-terminate(_Reason, #media_info{device = Device} = _MediaInfo) ->
+terminate(_Reason, #media_info{device = Device, name = Name, host = Host} = _MediaInfo) ->
   (catch file:close(Device)),
-  ?D({"Media entry terminating", _Reason}),
   ok.
 
 %%-------------------------------------------------------------------------

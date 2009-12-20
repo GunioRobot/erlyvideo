@@ -57,8 +57,11 @@ encode(#channel{type = ?RTMP_INVOKE_AMF0} = Channel, #amf{} = AMF) ->
 encode(#channel{type = ?RTMP_INVOKE_AMF3} = Channel, #amf{} = AMF) -> 
 	encode(Channel, encode_funcall(amf3, AMF));
 
+encode(#channel{type = ?RTMP_TYPE_SO_AMF0} = Channel, #so_message{} = Message) ->
+  encode(Channel, encode_shared_object_amf0(Message));
+
 encode(#channel{} = Channel, Data) when is_binary(Data) -> 
-	encode(Channel,Data,<<>>).
+	encode(Channel,Data,<<>>).	
 
 encode(_Channel, <<>>, Packet) -> Packet;
 
@@ -130,13 +133,14 @@ decode_channel_id(#rtmp_session{buff = <<Format:2, Id:6,Rest/binary>>} = State) 
 decode_channel_header(Rest, ?RTMP_HDR_CONTINUE, Id, State) ->
   Channel = array:get(Id, State#rtmp_session.channels),
   #channel{msg = Msg, timestamp = Timestamp, delta = Delta} = Channel,
-  Channel1 = case size(Msg) of
-    0 -> Channel#channel{timestamp = Timestamp + Delta};
+  Channel1 = case {Delta, size(Msg)} of
+    {undefined, _} -> Channel;
+    {_, 0} -> Channel#channel{timestamp = Timestamp + Delta};
     _ -> Channel
   end,
   decode_channel(Channel1, Rest, State);
 
-decode_channel_header(<<16#ffffff:24, TimeStamp:24, Rest/binary>>, ?RTMP_HDR_TS_CHG, Id, State) ->
+decode_channel_header(<<16#ffffff:24, TimeStamp:32, Rest/binary>>, ?RTMP_HDR_TS_CHG, Id, State) ->
   Channel = array:get(Id, State#rtmp_session.channels),
   decode_channel(Channel#channel{timestamp = TimeStamp+16#ffffff, delta = undefined}, Rest, State);
   
@@ -145,7 +149,7 @@ decode_channel_header(<<Delta:24, Rest/binary>>, ?RTMP_HDR_TS_CHG, Id, State) ->
   #channel{timestamp = TimeStamp} = Channel,
   decode_channel(Channel#channel{timestamp = TimeStamp + Delta, delta = Delta}, Rest, State);
   
-decode_channel_header(<<16#ffffff:24,Length:24,Type:8,TimeStamp:24,Rest/binary>>, ?RTMP_HDR_SAME_SRC, Id, State) ->
+decode_channel_header(<<16#ffffff:24,Length:24,Type:8,TimeStamp:32,Rest/binary>>, ?RTMP_HDR_SAME_SRC, Id, State) ->
   Channel = array:get(Id, State#rtmp_session.channels),
 	decode_channel(Channel#channel{timestamp=TimeStamp+16#ffffff, delta = undefined, length=Length,type=Type},Rest,State);
 	
@@ -154,21 +158,17 @@ decode_channel_header(<<Delta:24,Length:24,Type:8,Rest/binary>>, ?RTMP_HDR_SAME_
   #channel{timestamp = TimeStamp} = Channel,
 	decode_channel(Channel#channel{timestamp=TimeStamp + Delta, delta = Delta, length=Length,type=Type},Rest,State);
 
-decode_channel_header(<<16#ffffff:24,Length:24,Type:8,StreamId:32/little,TimeStamp:24,Rest/binary>>,?RTMP_HDR_NEW,Id, 
+decode_channel_header(<<16#ffffff:24,Length:24,Type:8,StreamId:32/little,TimeStamp:32,Rest/binary>>,?RTMP_HDR_NEW,Id, 
   #rtmp_session{channels = Channels} = State) when size(Channels) < Id ->
   decode_channel(#channel{id=Id,timestamp=TimeStamp+16#ffffff,delta = undefined, length=Length,type=Type,stream_id=StreamId},Rest,State);
 
-decode_channel_header(<<16#ffffff:24,Length:24,Type:8,StreamId:32/little,TimeStamp:24,Rest/binary>>,?RTMP_HDR_NEW,Id, State) ->
+decode_channel_header(<<16#ffffff:24,Length:24,Type:8,StreamId:32/little,TimeStamp:32,Rest/binary>>,?RTMP_HDR_NEW,Id, State) ->
   case array:get(Id, State#rtmp_session.channels) of
     #channel{} = Channel -> ok;
     _ -> Channel = #channel{}
   end,
 	decode_channel(Channel#channel{id=Id,timestamp=TimeStamp+16#ffffff,delta = undefined, length=Length,type=Type,stream_id=StreamId},Rest,State);
 	
-decode_channel_header(<<TimeStamp:24,Length:24,Type:8,StreamId:32/little,Rest/binary>>,?RTMP_HDR_NEW,Id, 
-  #rtmp_session{channels = Channels} = State) when size(Channels) < Id ->
-	decode_channel(#channel{id=Id,timestamp=TimeStamp,delta = undefined, length=Length,type=Type,stream_id=StreamId},Rest,State);
-    
 decode_channel_header(<<TimeStamp:24,Length:24,Type:8,StreamId:32/little,Rest/binary>>,?RTMP_HDR_NEW,Id, State) ->
   case array:get(Id, State#rtmp_session.channels) of
     #channel{} = Channel -> ok;
@@ -275,11 +275,14 @@ command(#channel{type = ?RTMP_INVOKE_AMF0, stream_id = StreamId, msg = Message},
 command(#channel{type = ?RTMP_INVOKE_AMF3, stream_id = StreamId, msg = <<_, Message/binary>>}, State) -> 
   decode_and_invoke(Message, amf0, State, StreamId);
 
-command(#channel{type = ?RTMP_TYPE_SO_AMF0, msg = Message}, State) ->
-  decode_shared_object_amf0(Message, State);
+command(#channel{type = ?RTMP_TYPE_SO_AMF0, msg = Body}, State) ->
+  Message = decode_shared_object_amf0(Body),
+  apps_shared_objects:command(Message, State);
+  
 
-command(#channel{type = ?RTMP_TYPE_SO_AMF3, msg = Message}, State) ->
-  decode_shared_object_amf0(Message, State);
+command(#channel{type = ?RTMP_TYPE_SO_AMF3, msg = Body}, State) ->
+  Message = decode_shared_object_amf0(Body),
+  apps_shared_objects:command(Message, State);
   
 
 	
@@ -293,6 +296,7 @@ decode_and_invoke(Message, _Module, State, StreamId) ->
 	{InvokeId, Rest2} = amf0:decode(Rest1),
 	Arguments = decode_list(Rest2, amf0, []),
 	AMF = #amf{command = Command, args = Arguments, stream_id = StreamId, type = invoke, id = InvokeId},
+  % ?D({"Call", Command, InvokeId, StreamId, Arguments}),
 	call_function(ems:check_app(State,Command, 2), Command, State, AMF).
   
   
@@ -321,13 +325,36 @@ call_function(App, Command, State, #amf{id = _Id} = AMF) ->
   %     State
   % end.
 
+encode_shared_object_amf0(#so_message{name = Name, version = Version, persistent = true, events = Events}) ->
+  encode_shared_object_events_amf0(<<(size(Name)):16, Name/binary, Version:32, 2:32, 0:32>>, Events);
 
-decode_shared_object_amf0(<<>>, State) -> State;
-decode_shared_object_amf0(<<Length:16, Name:Length/binary, Version:32, Persist:32, _:32, EventType, 
-                            EventDataLength:32, EventData:EventDataLength/binary, Rest/binary>>, State) ->
-  Persistent = case Persist of
-    2 -> true;
-    _ -> false
-  end,
-  State1 = apps_shared_objects:command({{Name, Version, Persistent}, EventType, EventData}, State),
-  decode_shared_object_amf0(Rest, State1).
+encode_shared_object_amf0(#so_message{name = Name, version = Version, persistent = false, events = Events}) ->
+  encode_shared_object_events_amf0(<<(size(Name)):16, Name/binary, Version:32, 0:32, 0:32>>, Events).
+
+encode_shared_object_events_amf0(Body, []) ->
+  Body;
+
+encode_shared_object_events_amf0(Body, [{EventType, Event} | Events]) ->
+  EventData = amf0:encode(Event),
+  encode_shared_object_events_amf0(<<Body/binary, EventType, (size(EventData)):32, EventData/binary>>, Events);
+
+encode_shared_object_events_amf0(Body, [EventType | Events]) ->
+  encode_shared_object_events_amf0(<<Body/binary, EventType, 0:32>>, Events).
+
+
+decode_shared_object_amf0(<<Length:16, Name:Length/binary, Version:32, 2:32, _:32, Events/binary>>) ->
+  decode_shared_object_events_amf0(Events, #so_message{name = Name, version = Version, persistent = true});
+
+decode_shared_object_amf0(<<Length:16, Name:Length/binary, Version:32, 0:32, _:32, Events/binary>>) ->
+  decode_shared_object_events_amf0(Events, #so_message{name = Name, version = Version, persistent = false}).
+
+decode_shared_object_events_amf0(<<>>, #so_message{events = Events} = Message) ->
+  Message#so_message{events = lists:reverse(Events)};
+
+decode_shared_object_events_amf0(<<EventType, 0:32, Rest/binary>>, #so_message{events = Events} = Message) ->
+  decode_shared_object_events_amf0(Rest, Message#so_message{events = [EventType|Events]});
+
+decode_shared_object_events_amf0(<<EventType, EventDataLength:32, EventData:EventDataLength/binary, Rest/binary>>,
+  #so_message{events = Events} = Message) ->
+  Event = amf0:decode(EventData),
+  decode_shared_object_events_amf0(Rest, Message#so_message{events = [{EventType, Event}|Events]}).

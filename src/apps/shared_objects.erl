@@ -2,7 +2,6 @@
 -author(max@maxidoors.ru).
 -include("../../include/ems.hrl").
 
-
 -behaviour(gen_server).
 
 -export([start_link/0]).
@@ -11,7 +10,7 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
          code_change/3]).
          
--export([connect/3]).
+-export([open/2]).
          
 -record(shared_objects, {
   objects
@@ -31,12 +30,9 @@ start_link()  ->
 %%% Callback functions from gen_server
 %%%------------------------------------------------------------------------
 
-connect(Name, Version, Persistent) -> 
-  {ok, Object} = open(Name, Persistent),
-  shared_object:connect(Object, Version).
-
 open(Name, Persistent) ->
-  gen_server:call(?MODULE, {open, Name, Persistent}).
+  {ok, Object} = gen_server:call(?MODULE, {open, Name, Persistent}),
+  Object.
 
 %%----------------------------------------------------------------------
 %% @spec (Port::integer()) -> {ok, State}           |
@@ -72,6 +68,7 @@ handle_call({open, Name, Persistent}, _From, #shared_objects{objects = Objects} 
     [{Name, Object}] -> ok;
     _ -> 
       {ok, Object} = ems_sup:start_shared_object(Name, Persistent),
+      link(Object),
       ets:insert(Objects, {Name, Object})
   end,
   {reply, {ok, Object}, State};
@@ -102,6 +99,13 @@ handle_cast(_Msg, State) ->
 %% @private
 %%-------------------------------------------------------------------------
 % 
+
+handle_info({'EXIT', Object, _Reason}, #shared_objects{objects = Objects} = State) ->
+  ets:match_delete(Objects, {'_', Object}),
+  ?D({"Died linked process", Object, _Reason}),
+  {noreply, State};
+  
+
 handle_info(_Info, State) ->
   ?D({"Unknown message", _Info}),
   {noreply, State}.

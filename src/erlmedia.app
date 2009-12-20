@@ -1,7 +1,7 @@
 {application, erlmedia,
  [
   {description, "Erlang Media Server"},
-  {vsn, "0.0.6"},
+  {vsn, "1.0"},
   {id, "erlmedia"},
   {modules,      [
 		  amf0,
@@ -40,15 +40,27 @@
   {applications, [kernel, stdlib]},
   {mod, {ems_app, []}},
   {env, [
-	{rtmp_port, 1935}, 
-	{file_dir, "/tmp"},
-	{tmp_dir, "/tmp/erlyvideo"},
-	{host, "rtmp://localhost"},
-	{applications, [apps_streaming, apps_recording, apps_shared_objects, apps_push, apps_rtmp]},
-	{http_port, 8082},
-	{secret_key, "fddbb018f51cb867a2e6d10b9eea7bd5eaec2d9ee1b814856251776f08e8acdef49154b0317b432ff6dfbd7c7e0e74d5db53287cc991e8cf46da8d6a27fc5ae8"},
-	{netstream, 'netstream@localhost'}
-	]}
+		{rtmp_port, 1935},
+		{rtsp_port, 8080},
+		{http_port, 8082},
+		{vhosts, [
+		   {default, [
+		      {hostname, ["localhost"]},
+		      {applications, [apps_push, apps_streaming, apps_recording, apps_rtmp, apps_shared_objects]},
+		      {secret_key, "123"},
+					{host, "rtmp://localhost"},
+		      {file_dir, "/tmp"}
+		   ]},
+		   {production, [
+		      {hostname, ["production.local"]},
+		      {applications, [apps_push, apps_streaming, apps_recording, apps_rtmp, apps_shared_objects]},
+					{auth_module, json_session},
+		      {secret_key, "fddbb018f51cb867a2e6d10b9eea7bd5eaec2d9ee1b814856251776f08e8acdef49154b0317b432ff6dfbd7c7e0e74d5db53287cc991e8cf46da8d6a27fc5ae8"},
+					{host, "rtmp://localhost"},
+		      {file_dir, "/tmp"}
+		   ]}
+		]}
+  ]}
  ]
 }.
 

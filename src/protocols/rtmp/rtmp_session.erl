@@ -42,6 +42,8 @@
 
 -export([start_link/0, set_socket/2]).
 
+-export([send/2, channel_id/2]).
+
 %% gen_fsm callbacks
 -export([init/1, handle_event/3,
          handle_sync_event/4, handle_info/3, terminate/3, code_change/4]).
@@ -183,8 +185,8 @@ init([]) ->
   error_logger:error_msg("~p Client connection timeout - closing.\n", [self()]),
   {stop, normal, State};    
         
-'WAIT_FOR_DATA'(Message, State) ->
-  case ems:try_method_chain('WAIT_FOR_DATA', [Message, State]) of
+'WAIT_FOR_DATA'(Message, #rtmp_session{host = Host} = State) ->
+  case ems:try_method_chain(Host, 'WAIT_FOR_DATA', [Message, State]) of
     {unhandled} ->
     	case Message of
     		{record,Channel} when is_record(Channel,channel) -> 
@@ -198,6 +200,7 @@ init([]) ->
 
 'WAIT_FOR_DATA'(info, _From, #rtmp_session{addr = {IP1, IP2, IP3, IP4}, port = Port} = State) ->
   {reply, {io_lib:format("~p.~p.~p.~p", [IP1, IP2, IP3, IP4]), Port, self()}, 'WAIT_FOR_DATA', State, ?TIMEOUT};
+  
         
 
 'WAIT_FOR_DATA'(Data, _From, State) ->
@@ -205,6 +208,11 @@ init([]) ->
   {next_state, 'WAIT_FOR_DATA', State, ?TIMEOUT}.
     
     
+send(#rtmp_session{server_chunk_size = ChunkSize} = State, {#channel{} = Channel, Data}) ->
+  Packet = rtmp:encode(Channel#channel{chunk_size = ChunkSize}, Data),
+  % ?D({"Channel", Channel#channel.type, Channel#channel.timestamp, Channel#channel.length}),
+	send_data(State, Packet).
+	
 %%-------------------------------------------------------------------------
 %% Func: handle_event/3
 %% Returns: {next_state, NextStateName, NextStateData}          |
@@ -270,10 +278,26 @@ handle_info({Port, {data, _Line}}, StateName, State) when is_port(Port) ->
   % No-op. Just child program
   {next_state, StateName, State, ?TIMEOUT};
 
+handle_info(#video_frame{type = Type, stream_id=StreamId,timestamp = TimeStamp,body=Body, raw_body = false} = Frame, 'WAIT_FOR_DATA', #rtmp_session{server_chunk_size = ChunkSize} = State) when is_binary(Body) ->
+  Channel = #channel{id = channel_id(Type, StreamId), chunk_size = ChunkSize,
+                     timestamp=TimeStamp,length=size(Body),type=Type,stream_id=StreamId},
+	Packet = rtmp:encode(Channel, ems_flv:encode(Frame)),
+	send_data(State, Packet),
+  {next_state, 'WAIT_FOR_DATA', State, ?TIMEOUT};
+
+handle_info(#video_frame{type = Type, stream_id=StreamId,timestamp = TimeStamp,body=Body, raw_body = true} = Frame, 'WAIT_FOR_DATA', #rtmp_session{server_chunk_size = ChunkSize} = State) when is_binary(Body) ->
+  Channel = #channel{id = channel_id(Type, StreamId), chunk_size = ChunkSize,
+                     timestamp=TimeStamp,length=size(Body),type=Type,stream_id=StreamId},
+	Packet = rtmp:encode(Channel, Body),
+	send_data(State, Packet),
+  {next_state, 'WAIT_FOR_DATA', State, ?TIMEOUT};
+
+
+
 
 handle_info(_Info, StateName, StateData) ->
   ?D({"Some info handled", _Info, StateName, StateData}),
-  {noreply, StateName, StateData}.
+  {next_state, StateName, StateData, ?TIMEOUT}.
 
 
 %%-------------------------------------------------------------------------
@@ -300,8 +324,8 @@ terminate(_Reason, _StateName, #rtmp_session{socket=Socket, streams = Streams} =
 %% Returns: {ok, NewState, NewStateData}
 %% @private
 %%-------------------------------------------------------------------------
-code_change(OldVersion, StateName, State, Extra) ->
-  plugins_code_change(OldVersion, StateName, State, Extra, ems:get_var(applications, [])).
+code_change(OldVersion, StateName, #rtmp_session{host = Host} = State, Extra) ->
+  plugins_code_change(OldVersion, StateName, State, Extra, ems:get_var(applications, Host, [])).
 
 plugins_code_change(_OldVersion, StateName, State, _Extra, []) -> {ok, StateName, State};
 
@@ -316,6 +340,13 @@ plugins_code_change(OldVersion, StateName, State, Extra, [Module | Modules]) ->
   plugins_code_change(OldVersion, NewStateName, NewState, Extra, Modules).
 
 
+
+channel_id(meta, StreamId) -> 3 + StreamId;
+channel_id(?FLV_TAG_TYPE_META, StreamId) -> 3 + StreamId;
+channel_id(video, StreamId) -> 4 + StreamId;
+channel_id(?FLV_TAG_TYPE_VIDEO, StreamId) -> 4 + StreamId;
+channel_id(audio, StreamId) -> 5 + StreamId;
+channel_id(?FLV_TAG_TYPE_AUDIO, StreamId) -> 5 + StreamId.
 
 
 

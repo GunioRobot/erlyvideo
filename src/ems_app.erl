@@ -31,6 +31,7 @@
 %%%
 %%%---------------------------------------------------------------------------------------
 -module(ems_app).
+-author(max@maxidoors.ru).
 -author('rsaccon@gmail.com').
 -author('simpleenigmainc@gmail.com').
 -author('luke@codegent.com').
@@ -47,17 +48,35 @@
 %%--------------------------------------------------------------------
 
 start(_Type, _Args) -> 
+  application:load(?APPLICATION),
+  
+  vhosts = ets:new(vhosts, [set, named_table, public]),
+  case application:get_env(?APPLICATION, vhosts) of
+    {ok, Hosts} when is_list(Hosts) -> init_vhosts(Hosts);
+    _ -> ok
+  end,
+	
   application:start(crypto),
   mnesia:create_schema([node()]),
   mnesia:start(),
   Start = ems_sup:start_link(),
   ok = ems:start_modules(),
-  case ems:get_var(auth_module, undefined) of
-    undefined ->
-      error_logger:error_msg("Warning! By default Erlyvideo trust every client.~nTo turn on proper authorization, tune parameter {auth_module, ModuleName}, for example {auth_module, json_session}~n");
-    _ -> ok
-  end,
   Start.
+
+init_vhosts([]) ->
+  ok;
+
+init_vhosts([{Name, Host} | Hosts]) ->
+  lists:foreach(fun({Key, Value}) ->
+    ets:insert(vhosts, {{Name, Key}, Value})
+  end, Host),
+  lists:foreach(fun(Hostname) ->
+    true = ets:insert(vhosts, {Hostname, Name})
+  end, proplists:get_value(hostname, Host, [])),
+  init_vhosts(Hosts).
+
+
+
 %%--------------------------------------------------------------------
 %% @spec (Any::any()) -> any()
 %% @doc Stop ErlMedia Application
@@ -65,6 +84,7 @@ start(_Type, _Args) ->
 %%--------------------------------------------------------------------
 stop(_S) -> 
   ems:stop_modules(),
+  ets:delete(vhosts),
   ok.
 
 

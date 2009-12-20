@@ -39,7 +39,7 @@
 
 -include("../../include/ems.hrl").
 
--export([file_dir/0, file_format/1, start_link/1, start_link/2, client/1]).
+-export([file_dir/1, file_format/1, start_link/1, start_link/2, client/1]).
 
 -export([init/2, ready/1]).
 
@@ -196,7 +196,7 @@ send_frame(#file_player{consumer = Consumer, stream_id = StreamId}, done) ->
   ok;
 
 send_frame(#file_player{consumer = Consumer, stream_id = StreamId} = Player, #video_frame{} = Frame) ->
-  ems_play:send(Consumer, Frame#video_frame{stream_id = StreamId}),
+  Consumer ! Frame#video_frame{stream_id = StreamId},
   Player1 = timeout_play(Frame, Player),
   ?MODULE:ready(Player1).
 
@@ -208,8 +208,8 @@ send_frame(#file_player{consumer = Consumer, stream_id = StreamId} = Player, #vi
 %% @doc retrieves FLV video file folder from application environment
 %% @end
 %%-------------------------------------------------------------------------	
-file_dir() ->
-  ems:get_var(file_dir, "/tmp").
+file_dir(Host) ->
+  ems:get_var(file_dir, Host, "/tmp").
 
 
 

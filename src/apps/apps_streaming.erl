@@ -39,12 +39,12 @@
 -include("../../include/ems.hrl").
 
 -export([createStream/2, play/2, deleteStream/2, closeStream/2, pause/2, pauseRaw/2, stop/2, seek/2,
-         receiveAudio/2, receiveVideo/2,
+         receiveAudio/2, receiveVideo/2, releaseStream/2,
          getStreamLength/2, prepareStream/1, checkBandwidth/2]).
 -export(['WAIT_FOR_DATA'/2]).
 
 
-'WAIT_FOR_DATA'({play, Name, Options}, #rtmp_session{streams = Streams, client_buffer = ClientBuffer} = State) ->
+'WAIT_FOR_DATA'({play, Name, Options}, #rtmp_session{streams = Streams, client_buffer = ClientBuffer, host = Host} = State) ->
   StreamId = proplists:get_value(stream_id, Options),
   
   case array:get(StreamId, Streams) of
@@ -53,12 +53,12 @@
       CurrentPlayer ! exit;
     _ -> ok
   end,
-  case media_provider:play(Name, [{client_buffer, ClientBuffer} | Options]) of
+  case media_provider:play(Host, Name, [{client_buffer, ClientBuffer} | Options]) of
     {ok, Player} ->
       Player ! start,
       {next_state, 'WAIT_FOR_DATA', State#rtmp_session{streams = array:set(StreamId, Player, Streams)}, ?TIMEOUT};
     {notfound, _Reason} ->
-      ?D({"File not found", Name}),
+      ?D({"File not found", Name, _Reason}),
       gen_fsm:send_event(self(), {status, ?NS_PLAY_STREAM_NOT_FOUND, StreamId}),
       {next_state, 'WAIT_FOR_DATA', State, ?TIMEOUT};
     Reason -> 
@@ -99,10 +99,12 @@
 %%-------------------------------------------------------------------------
 createStream(AMF, State) -> 
   {State1, StreamId} = next_stream(State),
-  ?D({"Create stream", StreamId}),
   apps_rtmp:reply(AMF#amf{args = [null, StreamId]}),
-  gen_fsm:send_event(self(), {send, {#channel{timestamp = 0, id = 2, type = ?RTMP_TYPE_CHUNK_SIZE}, ?RTMP_PREF_CHUNK_SIZE}}),
   State1.
+
+releaseStream(_AMF, State) -> 
+  % apps_rtmp:reply(AMF#amf{args = [null, undefined]}),
+  State.
 
 next_stream(State) -> next_stream(State, 1).
 next_stream(#rtmp_session{streams = Streams} = State, Stream) ->
