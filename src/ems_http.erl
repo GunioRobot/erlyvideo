@@ -59,55 +59,49 @@ handle(Host, 'GET', ["chat.html"], Req) ->
   Req:ok([{'Content-Type', "text/html; charset=utf8"}], Index);
 
   
-handle(_Host, 'POST', ["open", ChunkNumber], Req) ->
-  error_logger:info_msg("Request: open/~p.\n", [ChunkNumber]),
-  SessionId = generate_session_id(),
-  <<Timeout>> = Req:get(body),
-  {ok, _Pid} = rtmpt_session:start(SessionId),
-  error_logger:info_msg("Opened session ~p, timeout ~p.\n", [SessionId, Timeout]),
+handle(Host, 'POST', ["open", ChunkNumber], Req) ->
+  <<_Timeout>> = Req:get(body),
+  {ok, Pid} = ems_sup:start_rtmp_session(),
+  {ok, RTMP, SessionId} = rtmpt:open(Req:get(peer_addr), Pid),
+  rtmp_session:set_socket(Pid, RTMP),
+  ems_log:access(Host, "RTMPT OPEN ~p ~p ~p", [SessionId, ChunkNumber, Pid]),
   Req:ok([{'Content-Type', ?CONTENT_TYPE}, ?SERVER_HEADER], [SessionId, "\n"]);
   
-handle(_Host, 'POST', ["idle", SessionId, SequenceNumber], Req) ->
-  % error_logger:info_msg("Request: idle/~p/~p.\n", [SessionId, SequenceNumber]),
-  case ets:match_object(rtmp_sessions, {SessionId, '$2'}) of
-      [{SessionId, Rtmp}] ->
-          {Buffer} = gen_fsm:sync_send_event(Rtmp, {recv, list_to_int(SequenceNumber)}),
-          % io:format("Returning ~p~n", [size(Buffer)]),
-          Req:ok([{'Content-Type', ?CONTENT_TYPE}, ?SERVER_HEADER], [33, Buffer]);
-      _ ->
-          error_logger:info_msg("Request 'idle' to closed session ~p\n", [SessionId]),
-          Req:stream(<<0>>),
-          Req:stream(close)
+handle(Host, 'POST', ["idle", SessionId, SequenceNumber], Req) ->
+  case rtmpt:idle(SessionId, Req:get(peer_addr), list_to_int(SequenceNumber)) of
+    {ok, Data} ->
+      Req:ok([{'Content-Type', ?CONTENT_TYPE}, ?SERVER_HEADER], [33, Data]);
+    {error, _} ->
+      ems_log:error(Host, "RTMPT IDLE to closed session ~p", [SessionId]),
+      Req:stream(<<0>>),
+      Req:stream(close)
   end;
 
-
-handle(_Host, 'POST', ["send", SessionId, SequenceNumber], Req) ->
+handle(Host, 'POST', ["send", SessionId, SequenceNumber], Req) ->
   % error_logger:info_msg("Request: send/~p/~p.\n", [SessionId, SequenceNumber]),
-  case ets:match_object(rtmp_sessions, {SessionId, '$2'}) of
-      [{SessionId, Rtmp}] ->
-          gen_fsm:send_event(Rtmp, {client_data, Req:get(body)}),
-          {Buffer} = gen_fsm:sync_send_event(Rtmp, {recv, list_to_int(SequenceNumber)}),
-          % io:format("Returning ~p~n", [size(Buffer)]),
-          Req:ok([{'Content-Type', ?CONTENT_TYPE}, ?SERVER_HEADER], [33, Buffer]);
-      _ ->
-          error_logger:info_msg("Request 'idle' to closed session ~p\n", [SessionId]),
-          Req:stream(<<0>>),
-          Req:stream(close)
+  case rtmpt:send(SessionId, Req:get(peer_addr), list_to_int(SequenceNumber), Req:get(body)) of
+    {ok, Data} ->
+      Req:ok([{'Content-Type', ?CONTENT_TYPE}, ?SERVER_HEADER], [33, Data]);
+    {error, _} ->
+      ems_log:error(Host, "RTMPT SEND to closed session ~p", [SessionId]),
+      Req:stream(<<0>>),
+      Req:stream(close)
   end;
   
   
-handle(_Host, 'POST', ["close", SessionId, ChunkNumber], Req) ->
-    error_logger:info_msg("Request: close/~p/~p.\n", [SessionId, ChunkNumber]),
-    Req:stream(<<0>>),
-    Req:stream(close);
+handle(Host, 'POST', ["close", SessionId, _ChunkNumber], Req) ->
+  ems_log:error(Host, "RTMPT CLOSE ~p", [SessionId]),
+  rtmpt:close(SessionId, Req:get(peer_addr)),
+  Req:stream(<<0>>),
+  Req:stream(close);
     
-handle(_Host, 'POST', ["fcs", "ident", ChunkNumber], Req) ->
-    error_logger:info_msg("Request: ident/~p.\n", [ChunkNumber]),
-    Req:ok([{'Content-Type', ?CONTENT_TYPE}, ?SERVER_HEADER], "0.1");
+handle(_Host, 'POST', ["fcs", "ident", _ChunkNumber], Req) ->
+  % ems_log:access(Host, "RTMPT ident/~p", [ChunkNumber]),
+  Req:ok([{'Content-Type', ?CONTENT_TYPE}, ?SERVER_HEADER], "0.1");
     
 handle(_Host, 'POST', ["fcs", "ident2"], Req) ->
-    error_logger:info_msg("Request: ident2.\n"),
-    Req:ok([{'Content-Type', ?CONTENT_TYPE}, ?SERVER_HEADER], "0.1");
+  % ems_log:access(Host, "RTMPT ident2", []),
+  Req:ok([{'Content-Type', ?CONTENT_TYPE}, ?SERVER_HEADER], "0.1");
   
 handle(_Host, 'POST', ["channels", ChannelS, "message"], Req) ->
   Message = proplists:get_value("message", Req:parse_post()),
@@ -125,20 +119,22 @@ handle(_Host, 'POST', ["users", UserS, "message"], Req) ->
 handle(Host, 'GET', ["stream", Name], Req) ->
   case media_provider:play(Host, Name, [{stream_id, 1}]) of
     {ok, PlayerPid} ->
-      mpeg_ts:play(Name, PlayerPid, Req);
-    {notfound} ->
-      Req:respond(404, [{"Content-Type", "text/plain"}], "404 Page not found. ~p: ~p", [Name, Req]);
+      mpeg_ts:play(Name, PlayerPid, Req),
+      ok;
+    {notfound, Reason} ->
+      Req:respond(404, [{"Content-Type", "text/plain"}], "404 Page not found.\n ~p: ~s\n", [Name, Reason]);
     Reason -> 
       Req:respond(500, [{"Content-Type", "text/plain"}], "500 Internal Server Error.~n Failed to start video player: ~p~n ~p: ~p", [Reason, Name, Req])
   end;
   
-handle(_Host, 'GET', Path, Req) ->
+handle(Host, 'GET', Path, Req) ->
   FileName = filename:absname(filename:join(["wwwroot" | Path])),
   case filelib:is_regular(FileName) of
     true ->
-      ?D({"GET", FileName}),
+      ems_log:access(Host, "GET ~p ~s /~s", [Req:get(peer_addr), "-", string:join(Path, "/")]),
       Req:file(FileName);
     false ->
+      ems_log:access(Host, "NOTFOUND ~p ~s /~s", [Req:get(peer_addr), "-", string:join(Path, "/")]),
       Req:respond(404, [{"Content-Type", "text/plain"}], "404 Page not found. ~p: ~p", [Path, Req])
   end;
 
@@ -155,11 +151,6 @@ handle(_Host, _, Path, Req) ->
 
 
 
-
--spec generate_session_id() -> list().
-generate_session_id() ->
-    {T1, T2, T3} = now(),
-    lists:flatten(io_lib:format("~p:~p:~p", [T1, T2, T3])).
 
 
 -spec list_to_int(list()) -> integer().

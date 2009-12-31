@@ -6,6 +6,8 @@
 
 -include("../../include/ems.hrl").
 -include("../../include/h264.hrl").
+-include("../../include/mpegts.hrl").
+-include("../../include/video_frame.hrl").
 
 % ems_sup:start_ts_lander("http://localhost:8080").
 
@@ -53,18 +55,6 @@
   timestamp
 }).
 
--define(TYPE_VIDEO_MPEG1, 1).
--define(TYPE_VIDEO_MPEG2, 2).
--define(TYPE_VIDEO_MPEG4, 16).
--define(TYPE_VIDEO_H264,  27).
--define(TYPE_VIDEO_VC1,   234).
--define(TYPE_VIDEO_DIRAC, 209).
--define(TYPE_AUDIO_MPEG1, 3).
--define(TYPE_AUDIO_MPEG2, 4).
--define(TYPE_AUDIO_AAC,   15).
--define(TYPE_AUDIO_AAC2,  17).
--define(TYPE_AUDIO_AC3,   129).
--define(TYPE_AUDIO_DTS,   138).
 
 
 %% gen_server callbacks
@@ -188,10 +178,10 @@ handle_info({http, Socket, http_eoh}, TSLander) ->
   inet:setopts(Socket, [{active, true}, {packet, raw}]),
   {noreply, TSLander};
 
-handle_info(#video_frame{decoder_config = true, type = ?FLV_TAG_TYPE_AUDIO} = Frame, TSLander) ->
+handle_info(#video_frame{decoder_config = true, type = audio} = Frame, TSLander) ->
   {noreply, send_frame(Frame, TSLander#ts_lander{audio_config = Frame})};
 
-handle_info(#video_frame{decoder_config = true, type = ?FLV_TAG_TYPE_VIDEO} = Frame, TSLander) ->
+handle_info(#video_frame{decoder_config = true, type = video} = Frame, TSLander) ->
   {noreply, send_frame(Frame, TSLander#ts_lander{video_config = Frame})};
 
 handle_info(#video_frame{} = Frame, TSLander) ->
@@ -199,8 +189,10 @@ handle_info(#video_frame{} = Frame, TSLander) ->
 
 
 handle_info({'EXIT', Client, _Reason}, #ts_lander{clients = Clients} = TSLander) ->
-  case lists:member(Client, Clients) of
-    true ->
+  case {lists:member(Client, Clients), length(Clients)} of
+    {true, 1} ->
+      {stop, normal, TSLander#ts_lander{clients = []}};
+    {true, _} ->
       {noreply, TSLander#ts_lander{clients = lists:delete(Client, Clients)}};
     _ ->
       {stop, {exit, Client, _Reason}, TSLander}
@@ -246,6 +238,7 @@ demux(#ts_lander{pids = Pids} = TSLander, <<16#47, _:1, PayloadStart:1, _:1, Pid
   case lists:keyfind(Pid, #stream.pid, Pids) of
     #stream{handler = Handler, counter = _OldCounter} = Stream ->
       % Counter = (OldCounter + 1) rem 15,
+      ?D({Handler, Packet}),
       ?MODULE:Handler(ts_payload(Packet), TSLander, Stream#stream{counter = Counter}, Header);
     #stream_out{handler = Handler} ->
       Handler ! {ts_packet, Header, ts_payload(Packet)},
@@ -430,14 +423,14 @@ decode_aac(#stream{send_audio_config = false, consumer = Consumer} = Stream) ->
   % Config = <<16#A:4, 3:2, 1:1, 1:1, 0>>,
   Config = <<18,16,6>>,
   AudioConfig = #video_frame{       
-   	type          = ?FLV_TAG_TYPE_AUDIO,
+   	type          = audio,
    	decoder_config = true,
 		timestamp      = 0,
 		body          = Config,
-	  sound_format	= ?FLV_AUDIO_FORMAT_AAC,
-	  sound_type	  = ?FLV_AUDIO_TYPE_STEREO,
-	  sound_size	  = ?FLV_AUDIO_SIZE_16BIT,
-	  sound_rate	  = ?FLV_AUDIO_RATE_44
+	  sound_format	= aac,
+	  sound_type	  = stereo,
+	  sound_size	  = bit16,
+	  sound_rate	  = rate44
 	},
 	Consumer ! AudioConfig,
   % ?D({"Send audio config", AudioConfig}),
@@ -459,13 +452,13 @@ decode_aac(#stream{es_buffer = <<_Syncword:12, _ID:1, _Layer:2, _ProtectionAbsen
 send_aac(#stream{es_buffer = Data, consumer = Consumer, timestamp = Timestamp} = Stream) ->
   % ?D({"Audio", Timestamp, Data}),
   AudioFrame = #video_frame{       
-    type          = ?FLV_TAG_TYPE_AUDIO,
+    type          = audio,
     timestamp     = Timestamp,
     body          = Data,
-    sound_format  = ?FLV_AUDIO_FORMAT_AAC,
-    sound_type    = ?FLV_AUDIO_TYPE_STEREO,
-    sound_size    = ?FLV_AUDIO_SIZE_16BIT,
-    sound_rate    = ?FLV_AUDIO_RATE_44
+	  sound_format	= aac,
+	  sound_type	  = stereo,
+	  sound_size	  = bit16,
+	  sound_rate	  = rate44
   },
   Consumer ! AudioFrame,
   Stream#stream{es_buffer = <<>>}.

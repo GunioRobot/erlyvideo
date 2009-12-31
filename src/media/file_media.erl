@@ -35,7 +35,6 @@ metadata(Server) ->
 
 init([Name, file, Opts]) ->
   process_flag(trap_exit, true),
-  error_logger:info_msg("Opening file ~p~n", [Name]),
   Clients = ets:new(clients, [set, private]),
   Host = proplists:get_value(host, Opts),
   {ok, Info} = open_file(Name, Host),
@@ -94,8 +93,10 @@ handle_call({seek, Timestamp}, _From, #media_info{frames = FrameTable} = MediaIn
   Ids = ets:select(FrameTable, ets:fun2ms(fun(#file_frame{id = Id,timestamp = FrameTimestamp, keyframe = true} = _Frame) when FrameTimestamp =< TimestampInt ->
     {Id, FrameTimestamp}
   end)),
-  [Item | _] = lists:reverse(Ids),
-  {reply, Item, MediaInfo};
+  case lists:reverse(Ids) of
+    [Item | _] -> {reply, Item, MediaInfo};
+    _ -> {reply, undefined, MediaInfo}
+  end;
 
 
 handle_call({metadata}, _From, #media_info{format = mp4} = MediaInfo) ->

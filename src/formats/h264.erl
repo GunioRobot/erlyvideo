@@ -4,6 +4,7 @@
 
 -include("../../include/ems.hrl").
 -include("../../include/h264.hrl").
+-include("../../include/video_frame.hrl").
 
 -export([decode_nal/2, video_config/1]).
 -export([profile_name/1, exp_golomb_read_list/2, exp_golomb_read_list/3, exp_golomb_read_s/1]).
@@ -34,12 +35,12 @@ video_config(H264) ->
     ok -> {H264, []};
     DecoderConfig when is_binary(DecoderConfig) ->
       Frame = #video_frame{       
-       	type          = ?FLV_TAG_TYPE_VIDEO,
+       	type          = video,
        	decoder_config = true,
     		timestamp     = 0,
     		body          = DecoderConfig,
-    		frame_type    = ?FLV_VIDEO_FRAME_TYPE_KEYFRAME,
-    		codec_id      = ?FLV_VIDEO_CODEC_AVC
+    		frame_type    = keyframe,
+    		codec_id      = avc
     	},
     	{H264, [Frame]}
   end.
@@ -66,10 +67,10 @@ decode_nal(<<0:1, _NalRefIdc:2, ?NAL_SINGLE:5, _/binary>> = Data, #h264{dump_fil
   (catch slice_header(Data)),
   ?DUMP_H264(File, Data),
   VideoFrame = #video_frame{
-   	type          = ?FLV_TAG_TYPE_VIDEO,
+   	type          = video,
 		body          = nal_with_size(Data),
-		frame_type    = ?FLV_VIDEO_FRAME_TYPEINTER_FRAME,
-		codec_id      = ?FLV_VIDEO_CODEC_AVC
+		frame_type    = frame,
+		codec_id      = avc
   },
   {H264, [VideoFrame]};
 
@@ -94,20 +95,20 @@ decode_nal(<<0:1, _NalRefIdc:2, ?NAL_IDR:5, _/binary>> = Data, #h264{dump_file =
   (catch slice_header(Data)),
   ?DUMP_H264(File, Data),
   VideoFrame = #video_frame{
-   	type          = ?FLV_TAG_TYPE_VIDEO,
+   	type          = video,
 		body          = nal_with_size(Data),
-		frame_type    = ?FLV_VIDEO_FRAME_TYPE_KEYFRAME,
-		codec_id      = ?FLV_VIDEO_CODEC_AVC
+		frame_type    = keyframe,
+		codec_id      = avc
   },
   {H264, [VideoFrame]};
 
 decode_nal(<<0:1, _NalRefIdc:2, ?NAL_SEI:5, _/binary>> = Data, #h264{dump_file = File} = H264) ->
   ?DUMP_H264(File, Data),
   _VideoFrame = #video_frame{
-   	type          = ?FLV_TAG_TYPE_VIDEO,
+   	type          = video,
 		body          = nal_with_size(Data),
-		frame_type    = ?FLV_VIDEO_FRAME_TYPEINTER_FRAME,
-		codec_id      = ?FLV_VIDEO_CODEC_AVC
+		frame_type    = frame,
+		codec_id      = avc
   },
   
   {H264, []};
@@ -137,10 +138,10 @@ decode_nal(<<0:1, _NalRefIdc:2, ?NAL_DELIM:5, _PrimaryPicTypeId:3, _:5, _/binary
   % end,
   ?DUMP_H264(File, Delimiter),
   VideoFrame = #video_frame{
-   	type          = ?FLV_TAG_TYPE_VIDEO,
+   	type          = video,
 		body          = nal_with_size(Delimiter),
-		frame_type    = ?FLV_VIDEO_FRAME_TYPEINTER_FRAME,
-		codec_id      = ?FLV_VIDEO_CODEC_AVC
+		frame_type    = frame,
+		codec_id      = avc
   },
   % io:format("Access unit delimiter, PPT = ~p~n", [PrimaryPicType]),
   {H264, [VideoFrame]};

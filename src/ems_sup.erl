@@ -1,15 +1,16 @@
 %%% @author     Roberto Saccon <rsaccon@gmail.com> [http://rsaccon.com]
 %%% @author     Stuart Jackson <simpleenigmainc@gmail.com> [http://erlsoft.org]
 %%% @author     Luke Hubbard <luke@codegent.com> [http://www.codegent.com]
-%%% @copyright  2007 Luke Hubbard, Stuart Jackson, Roberto Saccon
+%%% @author     Max Lapshin <max@maxidoors.ru> [http://erlyvideo.org]
+%%% @copyright  2007 Luke Hubbard, Stuart Jackson, Roberto Saccon, 2009 Max Lapshin
 %%% @doc        Supervisor module
-%%% @reference  See <a href="http://erlyvideo.googlecode.com" target="_top">http://erlyvideo.googlecode.com</a> for more information
+%%% @reference  See <a href="http://erlyvideo.org/" target="_top">http://erlyvideo.org/</a> for more information
 %%% @end
 %%%
 %%%
 %%% The MIT License
 %%%
-%%% Copyright (c) 2007 Luke Hubbard, Stuart Jackson, Roberto Saccon
+%%% Copyright (c) 2007 Luke Hubbard, Stuart Jackson, Roberto Saccon, 2009 Max Lapshin
 %%%
 %%% Permission is hereby granted, free of charge, to any person obtaining a copy
 %%% of this software and associated documentation files (the "Software"), to deal
@@ -41,8 +42,7 @@
 -export ([init/1,start_link/0]).
 -export ([start_rtmp_session/0, start_rtsp_session/0, start_media/3, 
           start_file_play/2, start_stream_play/2,
-          start_mpegts_media/1, start_shared_object/2,
-          start_rtp_server/2]).
+          start_mpegts_media/1, start_shared_object/3]).
 
 
 %%--------------------------------------------------------------------
@@ -50,7 +50,7 @@
 %% @doc A startup function for whole supervisor. Started by application
 %% @end 
 %%--------------------------------------------------------------------
--spec start_link() -> {'error',_} | {'ok',pid()}.
+-spec(start_link() -> {error,_} | {ok,pid()}).
 start_link() ->
 	supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
@@ -92,9 +92,8 @@ start_stream_play(MediaEntry, Options) -> supervisor:start_child(stream_play_sup
 %%--------------------------------------------------------------------
 start_mpegts_media(URL) -> supervisor:start_child(mpegts_media_sup, [URL]).
 
-start_shared_object(Name, Persistent) -> supervisor:start_child(shared_object_sup, [Name, Persistent]).
+start_shared_object(Host, Name, Persistent) -> supervisor:start_child(shared_object_sup, [Host, Name, Persistent]).
 
-start_rtp_server(Media, Stream) -> supervisor:start_child(rtp_server_sup, [Media, Stream]).
 
 %%--------------------------------------------------------------------
 %% @spec (List::list()) -> any()
@@ -222,23 +221,7 @@ init([shared_object]) ->
             ]
         }
     };
-init([rtp_server]) ->
-    {ok,
-        {_SupFlags = {simple_one_for_one, ?MAX_RESTART, ?MAX_TIME},
-            [
-              % MediaEntry
-              {   undefined,                               % Id       = internal id
-                  {rtp_server,start_link,[]},             % StartFun = {M, F, A}
-                  temporary,                               % Restart  = permanent | transient | temporary
-                  2000,                                    % Shutdown = brutal_kill | int() >= 0 | infinity
-                  worker,                                  % Type     = worker | supervisor
-                  [shared_object]                            % Modules  = [Module] | dynamic
-              }
-            ]
-        }
-    };
 init([]) ->
-  ets:new(rtmp_sessions, [set, public, named_table]),
   
 
   MediaProviders = lists:map(fun({Host, _}) ->
@@ -255,6 +238,13 @@ init([]) ->
   
   
   Supervisors = [
+    {   rtmp_session_sup,
+        {supervisor,start_link,[{local, rtmp_session_sup}, ?MODULE, [rtmp_session]]},
+        permanent,                               % Restart  = permanent | transient | temporary
+        infinity,                                % Shutdown = brutal_kill | int() >= 0 | infinity
+        supervisor,                              % Type     = worker | supervisor
+        []                                       % Modules  = [Module] | dynamic
+    },
     % EMS HTTP
     {   ems_http_sup,                         % Id       = internal id
         {ems_http,start_link,[ems:get_var(http_port, 8082)]},             % StartFun = {M, F, A}
@@ -262,6 +252,13 @@ init([]) ->
         2000,                                    % Shutdown = brutal_kill | int() >= 0 | infinity
         worker,                                  % Type     = worker | supervisor
         [ems_http]                               % Modules  = [Module] | dynamic
+    },
+    {   ems_users_sup,                         % Id       = internal id
+        {ems_users,start_link,[]},             % StartFun = {M, F, A}
+        permanent,                               % Restart  = permanent | transient | temporary
+        2000,                                    % Shutdown = brutal_kill | int() >= 0 | infinity
+        worker,                                  % Type     = worker | supervisor
+        [ems_users]                               % Modules  = [Module] | dynamic
     },
     % Media entry supervisor
     {   file_media_sup,
@@ -317,55 +314,9 @@ init([]) ->
   | MediaProviders],
   
   
-  Supervisors1 = case ems:get_var(rtmp_port, undefined) of
-    undefined -> Supervisors;
-    RTMPPort -> [% EMS Listener
-      {   ems_sup,                                 % Id       = internal id
-          {rtmp_listener,start_link,[RTMPPort]},              % StartFun = {M, F, A}
-          permanent,                               % Restart  = permanent | transient | temporary
-          2000,                                    % Shutdown = brutal_kill | int() >= 0 | infinity
-          worker,                                  % Type     = worker | supervisor
-          [rtmp_listener]                             % Modules  = [Module] | dynamic
-      },
-      {   rtmp_session_sup,
-          {supervisor,start_link,[{local, rtmp_session_sup}, ?MODULE, [rtmp_session]]},
-          permanent,                               % Restart  = permanent | transient | temporary
-          infinity,                                % Shutdown = brutal_kill | int() >= 0 | infinity
-          supervisor,                              % Type     = worker | supervisor
-          []                                       % Modules  = [Module] | dynamic
-      }
-      |Supervisors]
-  end,
-
-  Supervisors2 = case ems:get_var(rtsp_port, undefined) of
-    undefined -> Supervisors1;
-    RTSPPort -> [% EMS Listener
-      {   rtsp_sup,                                 % Id       = internal id
-          {rtsp_listener,start_link,[RTSPPort]},              % StartFun = {M, F, A}
-          permanent,                               % Restart  = permanent | transient | temporary
-          2000,                                    % Shutdown = brutal_kill | int() >= 0 | infinity
-          worker,                                  % Type     = worker | supervisor
-          [rtsp_listener]                             % Modules  = [Module] | dynamic
-      },
-      {   rtsp_session_sup,
-          {supervisor,start_link,[{local, rtsp_session_sup}, ?MODULE, [rtsp_session]]},
-          permanent,                               % Restart  = permanent | transient | temporary
-          infinity,                                % Shutdown = brutal_kill | int() >= 0 | infinity
-          supervisor,                              % Type     = worker | supervisor
-          []                                       % Modules  = [Module] | dynamic
-      },
-      {   rtp_server_sup,
-          {supervisor,start_link,[{local, rtp_server_sup}, ?MODULE, [rtp_server]]},
-          permanent,                               % Restart  = permanent | transient | temporary
-          infinity,                                % Shutdown = brutal_kill | int() >= 0 | infinity
-          supervisor,                              % Type     = worker | supervisor
-          []                                       % Modules  = [Module] | dynamic
-      }
-      ] ++ Supervisors1
-  end,
   
   
-    {ok, {_SupFlags = {one_for_one, ?MAX_RESTART, ?MAX_TIME}, Supervisors2}}.
+  {ok, {{one_for_one, ?MAX_RESTART, ?MAX_TIME}, Supervisors}}.
 
 
 %%----------------------------------------------------------------------

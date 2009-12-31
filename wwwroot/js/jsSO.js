@@ -55,7 +55,7 @@ var jsSO = window.jsSO = {
 			if (jsSO.options.debug) {
 				$div.css({left: null, right:0, top:0});
 			}
-			swfobject.embedSWF('swf/jsSO.swf', "jsSOSwf", 320, 180, "9.0.0", false, flashvars, params, attributes);
+			swfobject.embedSWF('jsSO/jsSO.swf', "jsSOSwf", 320, 180, "9.0.0", false, flashvars, params, attributes);
 		});
 		
 		return this;
@@ -116,9 +116,24 @@ $.extend(jsSO, {
 		$(this).trigger('sync.jsSO', [updates, data]);
 	},
 
+	fcbOnMessage: function(data) {
+		this.debug('fcbOnMessage');
+		//this.debug(updates);
+		//this.debug(data);
+		this._data = data;
+		
+		// trigger onSync events
+		$(this).trigger('message.jsSO', [data]);
+	},
+
 	// set a data item
 	set: function(item, data) {
 		this._swf().set(item, data);
+		return this;
+	},
+
+	send: function(name, message) {
+		this._swf().send(name, message);
 		return this;
 	},
 
@@ -205,7 +220,7 @@ $.extend(jsSO, {
 });
 
 // events
-$.each(('connect,connectError,disconnect,sync,flashError,callResponse,callError').split(','), function(i, name) {
+$.each(('connect,connectError,disconnect,sync,message,flashError,callResponse,callError').split(','), function(i, name) {
 	jsSO['on'+name.charAt(0).toUpperCase()+name.substr(1)] = function(func) {
 		$(this).bind(name+'.jsSO', func);
 	};

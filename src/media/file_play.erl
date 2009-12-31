@@ -1,7 +1,7 @@
 %%% @author     Max Lapshin <max@maxidoors.ru>
 %%% @copyright  2009 Max Lapshin
 %%% @doc        Player module
-%%% @reference  See <a href="http://github.com/maxlapshin/erlyvideo" target="_top">http://github.com/maxlapshin/erlyvideo</a> for more information
+%%% @reference  See <a href="http://erlyvideo.org/" target="_top">http://erlyvideo.org/</a> for more information
 %%% @end
 %%%
 %%%
@@ -38,6 +38,7 @@
 -author('max@maxidoors.ru').
 
 -include("../../include/ems.hrl").
+-include("../../include/video_frame.hrl").
 
 -export([file_dir/1, file_format/1, start_link/1, start_link/2, client/1]).
 
@@ -48,7 +49,7 @@
 -record(file_player, {
   consumer,
   media_info,
-  client_buffer = ?MIN_CLIENT_BUFFER,
+  client_buffer,
   sent_video_config = false,
   sent_audio_config = false,
   prepush = 0,
@@ -133,11 +134,19 @@ ready(#file_player{media_info = MediaInfo,
       ?MODULE:ready(State#file_player{send_video = Video});
 
     {seek, Timestamp} ->
-      {Pos, NewTimestamp} = file_media:seek(MediaInfo, Timestamp),
-      timer:cancel(Timer),
-      % ?D({"Player seek to", Timestamp, Pos, NewTimestamp}),
-      self() ! play,
-      ?MODULE:ready(State#file_player{pos = Pos, ts_prev = NewTimestamp, playing_from = NewTimestamp, prepush = ClientBuffer});
+      case file_media:seek(MediaInfo, Timestamp) of
+        {Pos, NewTimestamp} ->
+          timer:cancel(Timer),
+          % ?D({"Player seek to", Timestamp, Pos, NewTimestamp}),
+          self() ! play,
+          ?MODULE:ready(State#file_player{pos = Pos, 
+                                          ts_prev = NewTimestamp, 
+                                          playing_from = NewTimestamp, 
+                                          prepush = ClientBuffer});
+        undefined ->
+          ?D({"Seek beyong current borders"}),
+          ?MODULE:ready(State)
+      end;
 
     stop -> 
       ?D("Player stopping"),
@@ -191,8 +200,7 @@ send_frame(Player, #video_frame{body = undefined}) ->
   self() ! play,
   ?MODULE:ready(Player);
   
-send_frame(#file_player{consumer = Consumer, stream_id = StreamId}, done) ->
-  gen_fsm:send_event(Consumer, {status, ?NS_PLAY_COMPLETE, StreamId}),
+send_frame(#file_player{}, done) ->
   ok;
 
 send_frame(#file_player{consumer = Consumer, stream_id = StreamId} = Player, #video_frame{} = Frame) ->

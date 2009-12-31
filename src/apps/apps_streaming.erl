@@ -2,15 +2,16 @@
 %%% @author     Roberto Saccon <rsaccon@gmail.com> [http://rsaccon.com]
 %%% @author     Stuart Jackson <simpleenigmainc@gmail.com> [http://erlsoft.org]
 %%% @author     Luke Hubbard <luke@codegent.com> [http://www.codegent.com]
-%%% @copyright  2007 Luke Hubbard, Stuart Jackson, Roberto Saccon
+%%% @author     Max Lapshin <max@maxidoors.ru> [http://erlyvideo.org]
+%%% @copyright  2007 Luke Hubbard, Stuart Jackson, Roberto Saccon, 2009 Max Lapshin
 %%% @doc        Generalized RTMP application behavior module
-%%% @reference  See <a href="http://erlyvideo.googlecode.com" target="_top">http://erlyvideo.googlecode.com</a> for more information
+%%% @reference  See <a href="http://erlyvideo.org" target="_top">http://erlyvideo.org</a> for more information
 %%% @end
 %%%
 %%%
 %%% The MIT License
 %%%
-%%% Copyright (c) 2007 Luke Hubbard, Stuart Jackson, Roberto Saccon
+%%% Copyright (c) 2007 Luke Hubbard, Stuart Jackson, Roberto Saccon, 2009 Max Lapshin
 %%%
 %%% Permission is hereby granted, free of charge, to any person obtaining a copy
 %%% of this software and associated documentation files (the "Software"), to deal
@@ -40,11 +41,12 @@
 
 -export([createStream/2, play/2, deleteStream/2, closeStream/2, pause/2, pauseRaw/2, stop/2, seek/2,
          receiveAudio/2, receiveVideo/2, releaseStream/2,
-         getStreamLength/2, prepareStream/1, checkBandwidth/2]).
+         getStreamLength/2, prepareStream/2, checkBandwidth/2]).
 -export(['WAIT_FOR_DATA'/2]).
 
 
-'WAIT_FOR_DATA'({play, Name, Options}, #rtmp_session{streams = Streams, client_buffer = ClientBuffer, host = Host} = State) ->
+'WAIT_FOR_DATA'({play, Name, Options}, #rtmp_session{socket = Socket, streams = Streams, host = Host} = State) ->
+  {client_buffer, ClientBuffer} = rtmp_socket:getopts(Socket, client_buffer),
   StreamId = proplists:get_value(stream_id, Options),
   
   case array:get(StreamId, Streams) of
@@ -56,11 +58,12 @@
   case media_provider:play(Host, Name, [{client_buffer, ClientBuffer} | Options]) of
     {ok, Player} ->
       Player ! start,
-      {next_state, 'WAIT_FOR_DATA', State#rtmp_session{streams = array:set(StreamId, Player, Streams)}, ?TIMEOUT};
+      ems_log:access(Host, "PLAY ~p ~p ~s", [State#rtmp_session.addr, State#rtmp_session.user_id, Name]),
+      {next_state, 'WAIT_FOR_DATA', State#rtmp_session{streams = array:set(StreamId, Player, Streams)}};
     {notfound, _Reason} ->
-      ?D({"File not found", Name, _Reason}),
-      gen_fsm:send_event(self(), {status, ?NS_PLAY_STREAM_NOT_FOUND, StreamId}),
-      {next_state, 'WAIT_FOR_DATA', State, ?TIMEOUT};
+      ems_log:access(Host, "NOTFOUND ~p ~p ~s", [State#rtmp_session.addr, State#rtmp_session.user_id, Name]),
+      rtmp_socket:status(Socket, StreamId, ?NS_PLAY_STREAM_NOT_FOUND),
+      {next_state, 'WAIT_FOR_DATA', State};
     Reason -> 
       ?D({"Failed to start video player", Reason}),
       {error, Reason}
@@ -68,25 +71,17 @@
 
 
 
-'WAIT_FOR_DATA'({metadata, Command, AMF, StreamId}, State) ->
-  gen_fsm:send_event(self(), {send, {
-    #channel{id = 4, timestamp = 0, type = ?RTMP_TYPE_METADATA_AMF0, stream_id = StreamId}, 
-    <<(amf0:encode(list_to_binary(Command)))/binary, (amf0:encode({object, AMF}))/binary>>}}),
-  {next_state, 'WAIT_FOR_DATA', State, ?TIMEOUT};
+'WAIT_FOR_DATA'({metadata, Command, AMF, StreamId}, #rtmp_session{socket = Socket} = State) ->
+  Socket ! #rtmp_message{
+    channel_id = 4, 
+    timestamp = 0, 
+    type = metadata, 
+    stream_id = StreamId, 
+    body = <<(amf0:encode(list_to_binary(Command)))/binary, (amf0:encode({object, AMF}))/binary>>
+  },
+  {next_state, 'WAIT_FOR_DATA', State};
 
 'WAIT_FOR_DATA'({metadata, Command, AMF}, State) -> 'WAIT_FOR_DATA'({metadata, Command, AMF, 0}, State);
-
-
-
-
-'WAIT_FOR_DATA'({video, Data, StreamId}, State) ->
-  Channel = #channel{id=5,timestamp=0, length=size(Data),type = ?RTMP_TYPE_VIDEO,stream_id = StreamId},
-  'WAIT_FOR_DATA'({send, {Channel, Data}}, State);
-
-'WAIT_FOR_DATA'({audio, Data, StreamId}, State) ->
-  Channel = #channel{id=4,timestamp=0, length=size(Data),type = ?RTMP_TYPE_AUDIO,stream_id = StreamId},
-  'WAIT_FOR_DATA'({send, {Channel, Data}}, State);
-
 
 
 'WAIT_FOR_DATA'(_Message, _State) -> {unhandled}.
@@ -97,13 +92,13 @@
 %% @doc  Processes a createStream command and responds
 %% @end
 %%-------------------------------------------------------------------------
-createStream(AMF, State) -> 
+createStream(State, AMF) -> 
   {State1, StreamId} = next_stream(State),
-  apps_rtmp:reply(AMF#amf{args = [null, StreamId]}),
+  apps_rtmp:reply(State,AMF#rtmp_funcall{args = [null, StreamId]}),
   State1.
 
-releaseStream(_AMF, State) -> 
-  % apps_rtmp:reply(AMF#amf{args = [null, undefined]}),
+releaseStream(State, _AMF) -> 
+  % apps_rtmp:reply(State,AMF#rtmp_funcall{args = [null, undefined]}),
   State.
 
 next_stream(State) -> next_stream(State, 1).
@@ -119,7 +114,7 @@ next_stream(#rtmp_session{streams = Streams} = State, Stream) ->
 %% @doc  Processes a deleteStream command and responds
 %% @end
 %%-------------------------------------------------------------------------
-deleteStream(#amf{stream_id = StreamId} = _AMF, #rtmp_session{streams = Streams} = State) ->
+deleteStream(#rtmp_session{streams = Streams} = State, #rtmp_funcall{stream_id = StreamId} = _AMF) ->
   case array:get(StreamId, Streams) of
     Player when is_pid(Player) -> Player ! stop;
     _ -> ok
@@ -133,13 +128,12 @@ deleteStream(#amf{stream_id = StreamId} = _AMF, #rtmp_session{streams = Streams}
 %% @end
 %%-------------------------------------------------------------------------
 
-play(#amf{args = [_Null, false | _]} = AMF, State) -> stop(AMF, State);
+play(State, #rtmp_funcall{args = [_Null, false | _]} = AMF) -> stop(State, AMF);
 
-play(#amf{args = [_Null, Name | Args]}, State) ->
-  StreamId = 1,
+play(State, #rtmp_funcall{args = [_Null, Name | Args], stream_id = StreamId}) ->
   Options = [{stream_id, StreamId} | extract_play_args(Args)],
   ?D({"PLAY", Name, Options}),
-  prepareStream(StreamId),
+  prepareStream(State, StreamId),
   gen_fsm:send_event(self(), {play, Name, Options}),
   State.
 
@@ -152,11 +146,11 @@ extract_play_args([Start, Duration, Reset]) -> [{start, Start}, {duration, Durat
 
 
 
-prepareStream(StreamId) ->
-  gen_fsm:send_event(self(), {control, ?RTMP_CONTROL_STREAM_RECORDED, StreamId}),
-  gen_fsm:send_event(self(), {control, ?RTMP_CONTROL_STREAM_BEGIN, StreamId}),
-  gen_fsm:send_event(self(), {status, ?NS_PLAY_START, StreamId}),
-  gen_fsm:send_event(self(), {status, ?NS_PLAY_RESET, StreamId}).
+prepareStream(#rtmp_session{socket = Socket}, StreamId) ->
+  rtmp_socket:send(Socket, #rtmp_message{type = stream_recorded, stream_id = StreamId}),
+  rtmp_socket:send(Socket, #rtmp_message{type = stream_begin, stream_id = StreamId}),
+  rtmp_socket:status(Socket, StreamId, ?NS_PLAY_START),
+  rtmp_socket:status(Socket, StreamId, ?NS_PLAY_RESET).
   
   
 
@@ -165,17 +159,17 @@ prepareStream(StreamId) ->
 %% @doc  Processes a pause command and responds
 %% @end
 %%-------------------------------------------------------------------------
-pause(#amf{args = [null, Pausing, NewTs], stream_id = StreamId}, #rtmp_session{streams = Streams} = State) -> 
+pause(#rtmp_session{streams = Streams, socket = Socket} = State, #rtmp_funcall{args = [null, Pausing, NewTs], stream_id = StreamId}) -> 
     ?D({"PAUSE", Pausing, round(NewTs)}),
     Player = array:get(StreamId, Streams),
     case Pausing of
       true ->
         Player ! pause,
-        gen_fsm:send_event(self(), {status, ?NS_PAUSE_NOTIFY, StreamId}),
+        rtmp_socket:status(Socket, StreamId, ?NS_PAUSE_NOTIFY),
         State;
       false ->
         Player ! resume,
-        gen_fsm:send_event(self(), {status, ?NS_UNPAUSE_NOTIFY, StreamId}),
+        rtmp_socket:status(Socket, StreamId, ?NS_UNPAUSE_NOTIFY),
         State
     end.
 
@@ -183,18 +177,18 @@ pause(#amf{args = [null, Pausing, NewTs], stream_id = StreamId}, #rtmp_session{s
 pauseRaw(AMF, State) -> pause(AMF, State).
 
 
-receiveAudio(#amf{args = [null, Audio], stream_id = StreamId}, #rtmp_session{streams = Streams} = State) ->
+receiveAudio(#rtmp_session{streams = Streams} = State, #rtmp_funcall{args = [null, Audio], stream_id = StreamId}) ->
   Player = array:get(StreamId, Streams),
   (catch Player ! {send_audio, Audio}),
   State.
 
-receiveVideo(#amf{args = [null, Video], stream_id = StreamId}, #rtmp_session{streams = Streams} = State) ->
+receiveVideo(#rtmp_session{streams = Streams} = State, #rtmp_funcall{args = [null, Video], stream_id = StreamId}) ->
   Player = array:get(StreamId, Streams),
   (catch Player ! {send_video, Video}),
   State.
 
 
-getStreamLength(#amf{args = [null | Args]}, #rtmp_session{} = State) ->
+getStreamLength(#rtmp_session{} = State, #rtmp_funcall{args = [null | Args]}) ->
   ?D({"getStreamLength", Args}),
   State.
 
@@ -203,14 +197,14 @@ getStreamLength(#amf{args = [null | Args]}, #rtmp_session{} = State) ->
 %% @doc  Processes a seek command and responds
 %% @end
 %%-------------------------------------------------------------------------
-seek(#amf{args = [_, Timestamp], stream_id = StreamId}, #rtmp_session{streams = Streams} = State) -> 
+seek(#rtmp_session{streams = Streams, socket = Socket} = State, #rtmp_funcall{args = [_, Timestamp], stream_id = StreamId}) -> 
   ?D({"invoke - seek", Timestamp}),
   Player = array:get(StreamId, Streams),
   Player ! {seek, Timestamp},
-  gen_fsm:send_event(self(), {status, ?NS_SEEK_NOTIFY, StreamId}),
-  gen_fsm:send_event(self(), {control, ?RTMP_CONTROL_STREAM_RECORDED, StreamId}),
-  gen_fsm:send_event(self(), {control, ?RTMP_CONTROL_STREAM_BEGIN, StreamId}),
-  gen_fsm:send_event(self(), {status, ?NS_PLAY_START, StreamId}),
+  rtmp_socket:status(Socket, StreamId, ?NS_SEEK_NOTIFY),
+  rtmp_socket:send(Socket, #rtmp_message{type = stream_recorded, stream_id = StreamId}),
+  rtmp_socket:send(Socket, #rtmp_message{type = stream_begin, stream_id = StreamId}),
+  rtmp_socket:status(Socket, StreamId, ?NS_PLAY_START),
   State.
   
 
@@ -219,7 +213,7 @@ seek(#amf{args = [_, Timestamp], stream_id = StreamId}, #rtmp_session{streams = 
 %% @doc  Processes a stop command and responds
 %% @end
 %%-------------------------------------------------------------------------
-stop(#amf{stream_id = StreamId} = _AMF, #rtmp_session{streams = Streams} = State) -> 
+stop(#rtmp_session{streams = Streams} = State, #rtmp_funcall{stream_id = StreamId} = _AMF) -> 
   case array:get(StreamId, Streams) of
     Player when is_pid(Player) ->
       Player ! exit,
@@ -233,7 +227,7 @@ stop(#amf{stream_id = StreamId} = _AMF, #rtmp_session{streams = Streams} = State
 %% @end
 %%-------------------------------------------------------------------------
 
-closeStream(#amf{stream_id = StreamId} = _AMF, #rtmp_session{streams = Streams} = State) -> 
+closeStream(#rtmp_session{streams = Streams} = State, #rtmp_funcall{stream_id = StreamId} = _AMF) -> 
 case array:get(StreamId, Streams) of
   undefined -> State;
   Player ->
@@ -245,6 +239,6 @@ end.
 % http://www.adobe.com/devnet/flashmediaserver/articles/dynamic_stream_switching_04.html
 % TODO Stub at this point, need to determine proper response to this call
 
-checkBandwidth(#amf{args = [null | Args]}, #rtmp_session{} = State) ->
+checkBandwidth(#rtmp_session{} = State, #rtmp_funcall{args = [null | Args]}) ->
   ?D({"checkBandwidth", Args}),
   State.

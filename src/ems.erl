@@ -1,15 +1,16 @@
 %%% @author     Roberto Saccon <rsaccon@gmail.com> [http://rsaccon.com]
 %%% @author     Stuart Jackson <simpleenigmainc@gmail.com> [http://erlsoft.org]
 %%% @author     Luke Hubbard <luke@codegent.com> [http://www.codegent.com]
-%%% @copyright  2007 Luke Hubbard, Stuart Jackson, Roberto Saccon
+%%% @author     Max Lapshin <max@maxidoors.ru> [http://erlyvideo.org]
+%%% @copyright  2007 Luke Hubbard, Stuart Jackson, Roberto Saccon, 2009 Max Lapshin
 %%% @doc        Helper module for easy application start, stop, reloading , etc.
-%%% @reference  See <a href="http://erlyvideo.googlecode.com" target="_top">http://erlyvideo.googlecode.com</a> for more information
+%%% @reference  See <a href="http://erlyvideo.org" target="_top">http://erlyvideo.org</a> for more information
 %%% @end
 %%%
 %%%
 %%% The MIT License
 %%%
-%%% Copyright (c) 2007 Luke Hubbard, Stuart Jackson, Roberto Saccon
+%%% Copyright (c) 2007 Luke Hubbard, Stuart Jackson, Roberto Saccon, 2009 Max Lapshin
 %%%
 %%% Permission is hereby granted, free of charge, to any person obtaining a copy
 %%% of this software and associated documentation files (the "Software"), to deal
@@ -51,6 +52,10 @@
 %%--------------------------------------------------------------------
 start() -> 
 	io:format("Starting ErlMedia ...~n"),
+  application:start(crypto),
+  application:start(rtmp),
+  application:start(rtsp),
+  ems_log:start(),
 	application:start(?APPLICATION).
 
 
@@ -62,7 +67,12 @@ start() ->
 stop() ->
 	io:format("Stopping ErlMedia ...~n"),
 	application:stop(?APPLICATION),
-	application:unload(?APPLICATION).
+	application:unload(?APPLICATION),
+  ems_log:stop(),
+	application:stop(rtsp),
+	application:unload(rtsp),
+	application:stop(rtmp),
+	application:unload(rtmp).
 
 %%--------------------------------------------------------------------
 %% @spec () -> any()
@@ -139,7 +149,7 @@ get_var(Opt, Default) ->
 
 get_var(Key, Host, Default) ->
   case ets:match_object(vhosts, {{host(Host), Key}, '$1'}) of
-    [{{Hostname, Key}, Value}] -> Value;
+    [{{_Hostname, Key}, Value}] -> Value;
     [] -> Default
   end.
 

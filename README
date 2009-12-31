@@ -1,4 +1,6 @@
-erlyvideo is a flash streaming server, written in erlang.
+erlyvideo is a flash streaming server, written in erlang: http://erlyvideo.org/
+Repo moved to http://github.com/erlyvideo/erlyvideo
+
 
 currently it can:
 
@@ -19,14 +21,16 @@ currently it can:
 currently in development:
   * improve handling of background vlc/ffmpeg for them to recode uploaded videos
   * add support for extended play command (with initial seek, length, ets)
-  * Shared Objects
 
   
 future plans:
-  * try to change quality on fly
-
-
-abandoned plans:
+  * MPEG TS restreaming of files
+  * Apple HTTP LiveStreaming
+  * Source authorization (RTSP, MPEG TS, etc.)
+  * Shared Objects
+  * try to change quality on fly (smooth streaming)
+  * capture mpeg4 IP cameras
+  * raw RTP capture from sdp file
 
 
 What you can do right now?
@@ -45,8 +49,10 @@ How can You help?
 
 How to launch:
 
-  * git clone git://github.com/maxlapshin/erlyvideo.git
+  * git clone git://github.com/erlyvideo/erlyvideo.git
   * cd erlyvideo
+  * git submodule init
+  * git submodule update
   * cp src/erlmedia.app ebin/erlmedia.app
   * $EDITOR ebin/erlmedia.app
   * change /tmp to /Users/username/Movies

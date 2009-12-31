@@ -3,6 +3,7 @@
 -module(stream_media).
 -author(max@maxidoors.ru).
 -include("../include/ems.hrl").
+-include("../include/video_frame.hrl").
 -include("../include/media_info.hrl").
 -include_lib("stdlib/include/ms_transform.hrl").
 
@@ -26,7 +27,7 @@ codec_config(MediaEntry, Type) -> gen_server:call(MediaEntry, {codec_config, Typ
 publish(undefined, _Frame) ->
   {error, no_stream};
 
-publish(Server, Frame) ->
+publish(Server, #video_frame{} = Frame) ->
   gen_server:call(Server, {publish, Frame}).
 
 set_owner(Server, Owner) ->
@@ -81,7 +82,7 @@ init([Name, record, Opts]) ->
 handle_call({create_player, Options}, _From, #media_info{name = Name, clients = Clients, gop = GOP} = MediaInfo) ->
   {ok, Pid} = ems_sup:start_stream_play(self(), Options),
   link(Pid),
-  ?D({"Creating media player for", MediaInfo#media_info.host, Name, "client", proplists:get_value(consumer, Options)}),
+  ?D({"Creating media player for", MediaInfo#media_info.host, Name, "client", proplists:get_value(consumer, Options), "->", Pid}),
   case MediaInfo#media_info.video_decoder_config of
     undefined -> ok;
     VideoConfig -> Pid ! VideoConfig
@@ -114,20 +115,18 @@ handle_call({set_owner, _Owner}, _From, #media_info{owner = Owner} = MediaInfo) 
   {reply, {error, {owner_exists, Owner}}, MediaInfo, ?TIMEOUT};
 
 
-handle_call({publish, #channel{timestamp = TS} = Channel}, _From, #media_info{base_timestamp = undefined} = Recorder) ->
-  handle_call({publish, Channel}, _From, Recorder#media_info{base_timestamp = TS});
+handle_call({publish, #video_frame{timestamp = TS} = Frame}, _From, #media_info{base_timestamp = undefined} = Recorder) ->
+  handle_call({publish, Frame}, _From, Recorder#media_info{base_timestamp = TS});
 
-handle_call({publish, #channel{timestamp = TS} = Channel}, _From, 
+handle_call({publish, #video_frame{timestamp = TS} = Frame}, _From, 
             #media_info{device = Device, clients = Clients, base_timestamp = BaseTS} = Recorder) ->
   % ?D({"Record",Channel#channel.type, TS - BaseTS}),
-  Channel1 = Channel#channel{timestamp = TS - BaseTS},
-	Tag = ems_flv:to_tag(Channel1),
+  Frame1 = Frame#video_frame{timestamp = TS - BaseTS, stream_id = 1},
 	case Device of
 	  undefined -> ok;
-	  _ -> file:write(Device, Tag)
+	  _ -> file:write(Device, ems_flv:to_tag(Frame1))
 	end,
-  Packet = Channel1#channel{id = ems_play:channel_id(Channel1#channel.type,1)},
-  lists:foreach(fun(Pid) -> Pid ! Packet end, Clients),
+  lists:foreach(fun(Pid) -> Pid ! Frame1 end, Clients),
 	{reply, ok, Recorder, ?TIMEOUT};
 
 handle_call(Request, _From, State) ->
@@ -190,13 +189,13 @@ handle_info({'EXIT', Client, _Reason}, #media_info{clients = Clients} = MediaInf
     0 -> timer:send_after(?FILE_CACHE_TIME, {graceful});
     _ -> ok
   end,
-  {noreply, MediaInfo#media_info{clients = Clients}, ?TIMEOUT};
+  {noreply, MediaInfo#media_info{clients = Clients1}, ?TIMEOUT};
 
-handle_info(#video_frame{decoder_config = true, type = ?FLV_TAG_TYPE_AUDIO} = Frame, #media_info{clients = Clients} = MediaInfo) ->
+handle_info(#video_frame{decoder_config = true, type = audio} = Frame, #media_info{clients = Clients} = MediaInfo) ->
   lists:foreach(fun(Client) -> Client ! Frame end, Clients),
   {noreply, MediaInfo#media_info{audio_decoder_config = Frame}, ?TIMEOUT};
 
-handle_info(#video_frame{decoder_config = true, type = ?FLV_TAG_TYPE_VIDEO} = Frame, #media_info{clients = Clients} = MediaInfo) ->
+handle_info(#video_frame{decoder_config = true, type = video} = Frame, #media_info{clients = Clients} = MediaInfo) ->
   lists:foreach(fun(Client) -> Client ! Frame end, Clients),
   {noreply, MediaInfo#media_info{video_decoder_config = Frame}, ?TIMEOUT};
 
@@ -230,7 +229,7 @@ handle_info(_Info, State) ->
   ?D({"Undefined info", _Info, State}),
   {noreply, State, ?TIMEOUT}.
 
-store_last_gop(MediaInfo, #video_frame{type = ?FLV_TAG_TYPE_VIDEO, frame_type = ?FLV_VIDEO_FRAME_TYPE_KEYFRAME} = Frame) ->
+store_last_gop(MediaInfo, #video_frame{type = video, frame_type = keyframe} = Frame) ->
   ?D({"New GOP", Frame#video_frame.timestamp}),
   MediaInfo#media_info{gop = [Frame]};
 
@@ -253,7 +252,7 @@ store_last_gop(MediaInfo, _) ->
 %% @end
 %% @private
 %%-------------------------------------------------------------------------
-terminate(_Reason, #media_info{device = Device, name = Name, host = Host} = _MediaInfo) ->
+terminate(_Reason, #media_info{device = Device} = _MediaInfo) ->
   (catch file:close(Device)),
   ok.
 

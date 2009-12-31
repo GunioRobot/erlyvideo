@@ -1,15 +1,16 @@
 %%% @author     Roberto Saccon <rsaccon@gmail.com> [http://rsaccon.com]
 %%% @author     Stuart Jackson <simpleenigmainc@gmail.com> [http://erlsoft.org]
 %%% @author     Luke Hubbard <luke@codegent.com> [http://www.codegent.com]
-%%% @copyright  2007 Luke Hubbard, Stuart Jackson, Roberto Saccon
+%%% @author     Max Lapshin <max@maxidoors.ru> [http://erlyvideo.org]
+%%% @copyright  2007 Luke Hubbard, Stuart Jackson, Roberto Saccon, 2009 Max Lapshin
 %%% @doc        Supervisor module
-%%% @reference  See <a href="http://erlyvideo.googlecode.com" target="_top">http://erlyvideo.googlecode.com</a> for more information
+%%% @reference  See <a href="http://erlyvideo.org/" target="_top">http://erlyvideo.org/</a> for more information
 %%% @end
 %%%
 %%%
 %%% The MIT License
 %%%
-%%% Copyright (c) 2007 Luke Hubbard, Stuart Jackson, Roberto Saccon
+%%% Copyright (c) 2007 Luke Hubbard, Stuart Jackson, Roberto Saccon, 2009 Max Lapshin
 %%%
 %%% Permission is hereby granted, free of charge, to any person obtaining a copy
 %%% of this software and associated documentation files (the "Software"), to deal
@@ -50,31 +51,21 @@
 start(_Type, _Args) -> 
   application:load(?APPLICATION),
   
-  vhosts = ets:new(vhosts, [set, named_table, public]),
-  case application:get_env(?APPLICATION, vhosts) of
-    {ok, Hosts} when is_list(Hosts) -> init_vhosts(Hosts);
-    _ -> ok
-  end,
+  ems_vhosts:start(),
 	
-  application:start(crypto),
   mnesia:create_schema([node()]),
   mnesia:start(),
   Start = ems_sup:start_link(),
+  case ems:get_var(rtsp_port, undefined) of
+    undefined -> ok;
+    RTSP when is_integer(RTSP) -> rtsp:start_server(RTSP, rtsp_listener1, ems_rtsp)
+  end,
+  case ems:get_var(rtmp_port, undefined) of
+    undefined -> ok;
+    RTMP when is_integer(RTMP) -> rtmp_socket:start_server(RTMP, rtmp_listener1, rtmp_session)
+  end,
   ok = ems:start_modules(),
   Start.
-
-init_vhosts([]) ->
-  ok;
-
-init_vhosts([{Name, Host} | Hosts]) ->
-  lists:foreach(fun({Key, Value}) ->
-    ets:insert(vhosts, {{Name, Key}, Value})
-  end, Host),
-  lists:foreach(fun(Hostname) ->
-    true = ets:insert(vhosts, {Hostname, Name})
-  end, proplists:get_value(hostname, Host, [])),
-  init_vhosts(Hosts).
-
 
 
 %%--------------------------------------------------------------------
@@ -82,11 +73,10 @@ init_vhosts([{Name, Host} | Hosts]) ->
 %% @doc Stop ErlMedia Application
 %% @end 
 %%--------------------------------------------------------------------
-stop(_S) -> 
+stop(_S) ->
   ems:stop_modules(),
-  ets:delete(vhosts),
-  ok.
-
+  ems_vhosts:stop().
+  
 
 %%--------------------------------------------------------------------
 %% @spec (Any::any()) -> any()

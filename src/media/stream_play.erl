@@ -1,7 +1,7 @@
 %%% @author     Max Lapshin <max@maxidoors.ru>
 %%% @copyright  2009 Max Lapshin
 %%% @doc        Player module
-%%% @reference  See <a href="http://github.com/maxlapshin/erlyvideo" target="_top">http://github.com/maxlapshin/erlyvideo</a> for more information
+%%% @reference  See <a href="http://erlyvideo.org/" target="_top">http://erlyvideo.org/</a> for more information
 %%% @end
 %%%
 %%%
@@ -35,6 +35,7 @@
 -author('max@maxidoors.ru').
 
 -include("../../include/ems.hrl").
+-include("../../include/video_frame.hrl").
 
 -export([start_link/2, client/1]).
 
@@ -76,11 +77,11 @@ init(MediaEntry, Options) ->
   link(Consumer),
   link(MediaEntry),
   ?MODULE:ready(#stream_player{consumer = Consumer,
-                      stream_id = proplists:get_value(stream_id, Options, 1),
+                      stream_id = proplists:get_value(stream_id, Options, undefined),
                       media_info = MediaEntry}).
   
 	
-ready(#stream_player{consumer = Consumer, stream_id = StreamId} = State) ->
+ready(#stream_player{consumer = Consumer} = State) ->
   receive
     {client_buffer, _ClientBuffer} ->
       ?MODULE:ready(State);
@@ -120,14 +121,9 @@ ready(#stream_player{consumer = Consumer, stream_id = StreamId} = State) ->
     #video_frame{} = Frame ->
       send_frame(State, Frame);
       
-    #channel{msg = Body} = Channel ->
-      gen_fsm:send_event(Consumer, {send, {Channel, Body}}),
-      ?MODULE:ready(State);
-
     eof ->
       ?D("MPEG TS finished"),
-      gen_fsm:send_event(Consumer, {status, ?NS_PLAY_COMPLETE, StreamId}),
-      ?MODULE:ready(State);
+      ok;
     
     stop -> 
       ?D({"stream play stop", self()}),
@@ -141,20 +137,20 @@ ready(#stream_player{consumer = Consumer, stream_id = StreamId} = State) ->
       error_logger:info_msg("~p Video player lost connection.\n", [self()]),
       ok;
   	Else ->
-  	  ?D({"Unknown message", Else}),
+  	  ?D({"Unknown message", self(), Else}),
   	  ?MODULE:ready(State)
   end.
 
-send_frame(#stream_player{sent_video_decoder = true} = Player, #video_frame{decoder_config = true, type = ?FLV_TAG_TYPE_VIDEO}) ->
+send_frame(#stream_player{sent_video_decoder = true} = Player, #video_frame{decoder_config = true, type = video}) ->
   ?MODULE:ready(Player);
 
-send_frame(#stream_player{sent_audio_decoder = true} = Player, #video_frame{decoder_config = true, type = ?FLV_TAG_TYPE_AUDIO}) ->
+send_frame(#stream_player{sent_audio_decoder = true} = Player, #video_frame{decoder_config = true, type = audio}) ->
   ?MODULE:ready(Player);
 
-send_frame(#stream_player{synced = false} = Player, #video_frame{decoder_config = false, frame_type = ?FLV_VIDEO_FRAME_TYPEINTER_FRAME}) ->
+send_frame(#stream_player{synced = false} = Player, #video_frame{decoder_config = false, frame_type = frame}) ->
   ?MODULE:ready(Player);
 
-send_frame(#stream_player{synced = false} = Player, #video_frame{decoder_config = false, frame_type = ?FLV_VIDEO_FRAME_TYPE_KEYFRAME} = VideoFrame) ->
+send_frame(#stream_player{synced = false} = Player, #video_frame{decoder_config = false, frame_type = keyframe} = VideoFrame) ->
   send_frame(Player#stream_player{synced = true}, VideoFrame);
 
 
@@ -171,8 +167,8 @@ send_frame(#stream_player{consumer = Consumer, stream_id = StreamId, base_ts = B
   Consumer ! Frame#video_frame{stream_id = StreamId, timestamp = Timestamp},
   % ?D({"Frame", Timestamp, Type, Decoder, Frame#video_frame.frame_type}),
   Player1 = case {Decoder, Type} of
-    {true, ?FLV_TAG_TYPE_AUDIO} -> Player#stream_player{sent_audio_decoder = true};
-    {true, ?FLV_TAG_TYPE_VIDEO} -> Player#stream_player{sent_video_decoder = true};
+    {true, audio} -> Player#stream_player{sent_audio_decoder = true};
+    {true, video} -> Player#stream_player{sent_video_decoder = true};
     _ -> Player
   end,
   ?MODULE:ready(Player1).

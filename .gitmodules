@@ -1,0 +1,12 @@
+[submodule "deps/rtmp"]
+	path = deps/rtmp
+	url = git://github.com/erlyvideo/erlang-rtmp
+[submodule "deps/log4erl"]
+	path = deps/log4erl
+	url = git://github.com/erlyvideo/log4erl
+[submodule "deps/amf"]
+	path = deps/amf
+	url = git://github.com/erlyvideo/erlang-amf
+[submodule "deps/erlydtl"]
+	path = deps/erlydtl
+	url = git://github.com/erlyvideo/erlydtl

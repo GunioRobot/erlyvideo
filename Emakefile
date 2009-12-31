@@ -5,9 +5,12 @@
 {"src/auth/*", [{d, debug}, {outdir, "ebin"}, {i, "include"}]}.
 {"src/formats/*", [{d, debug}, {outdir, "ebin"}, {i, "include"}]}.
 {"src/protocols/*", [{d, debug}, {outdir, "ebin"}, {i, "include"}]}.
-{"src/protocols/*/*", [{d, debug}, {outdir, "ebin"}, {i, "include"}]}.
+{"src/shared_objects/*", [{d, debug}, {outdir, "ebin"}, {i, "include"}]}.
 {"src/plugins/*", [{d, debug}, {outdir, "ebin"}, {i, "include"}]}.
-{"deps/misultin/src/*", [{outdir, "ebin"}, {i, "deps/misultin/include"}]}.
-{"deps/erlang-amf/src/*", [{outdir, "ebin"}, {i, "deps/erlang-amf/src"}]}.
-{"deps/erlydtl-0.5.3/src/erlydtl/*", [{outdir, "ebin"}, {i, "deps/erlydtl-0.5.3/include"}]}.
+{"lib/misultin/src/*", [{outdir, "lib/misultin/ebin"}, {i, "lib/misultin/include"}]}.
+{"lib/ertsp/src/*", [{outdir, "lib/ertsp/ebin"}, {i, "lib/ertsp/include"}]}.
+{"deps/amf/src/*", [{outdir, "deps/amf/ebin"}, {i, "deps/amf/src"}]}.
+{"deps/rtmp/src/*", [{outdir, "deps/rtmp/ebin"}, {i, "deps/rtmp/src"}]}.
+{"deps/log4erl/src/*", [{outdir, "deps/log4erl/ebin"}, {i, "deps/log4erl/include"}]}.
+{"deps/erlydtl/src/erlydtl/*", [{outdir, "deps/erlydtl/ebin"}, {i, "deps/erlydtl/include"}]}.
 % debug_info, bin_opt_info, 
