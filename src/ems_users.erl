@@ -155,7 +155,7 @@ init([]) ->
 %% @private
 %%-------------------------------------------------------------------------
 
-handle_call({login, UserId, UserChannels}, {Client, _Ref}, 
+handle_call({login, UserId, UserChannels}, {Client, _Ref},
   #ems_users{clients = Clients, user_ids = UserIds, channels = Channels, session_id = LastSessionId} = Server) ->
   SessionId = LastSessionId + 1,
   ets:insert(Clients, #client_entry{session_id = SessionId, client = Client, user_id = UserId, channels = Channels}),
@@ -185,16 +185,16 @@ handle_call(Request, _From, State) ->
 %%-------------------------------------------------------------------------
 handle_cast({send_to_user, UserId, Message}, #ems_users{user_ids = UserIds} = Server) ->
   Clients = ets:lookup(UserIds, UserId),
-  F = fun(#user_id_entry{client = Client}) -> 
-    gen_fsm:send_event(Client, {message, Message}) 
+  F = fun(#user_id_entry{client = Client}) ->
+    gen_fsm:send_event(Client, {message, Message})
   end,
   lists:foreach(F, Clients),
   {noreply, Server};
 
 handle_cast({send_to_channel, Channel, Message}, #ems_users{channels = Channels} = Server) ->
   Clients = ets:lookup(Channels, Channel),
-  F = fun(#channel_entry{client = Client}) -> 
-    gen_fsm:send_event(Client, {message, Message}) 
+  F = fun(#channel_entry{client = Client}) ->
+    gen_fsm:send_event(Client, {message, Message})
   end,
   lists:foreach(F, Clients),
   {noreply, Server};

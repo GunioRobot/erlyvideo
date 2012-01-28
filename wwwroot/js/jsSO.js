@@ -27,7 +27,7 @@ var jsSO = window.jsSO = {
 			options = objectName;
 			objectName = options.objectName;
 		}
-	
+
 		if (objectName && objectName.match(/rtmps?:\/\//)) {
 			this.debug('WARNING: connect parameter order has changed: connect(serverUrl, objectName)');
 			var tmp = serverUrl;
@@ -37,9 +37,9 @@ var jsSO = window.jsSO = {
 			this.error('wrong serverUrl given: '+serverUrl);
 			return;
 		}
-		
+
 		$.extend(this.options, this._defaultOptions, options);
-	
+
 		this.debug('connect');
 
 		var flashvars = {
@@ -57,7 +57,7 @@ var jsSO = window.jsSO = {
 			}
 			swfobject.embedSWF('jsSO/jsSO.swf', "jsSOSwf", 320, 180, "9.0.0", false, flashvars, params, attributes);
 		});
-		
+
 		return this;
 	},
 	fcbFlashInit: function() {
@@ -69,7 +69,7 @@ var jsSO = window.jsSO = {
 		// http://livedocs.adobe.com/flash/9.0/ActionScriptLangRefV3/flash/events/NetStatusEvent.html
 		if (code == 'NetConnection.Connect.Success') {
 			this.debug('onConnect');
-			
+
 			if (this.options.loadServices) {
 				this.reloadServices();
 			} else {
@@ -111,7 +111,7 @@ $.extend(jsSO, {
 		//this.debug(data);
 		this._data = data;
 		this._updates = updates;
-		
+
 		// trigger onSync events
 		$(this).trigger('sync.jsSO', [updates, data]);
 	},
@@ -121,7 +121,7 @@ $.extend(jsSO, {
 		//this.debug(updates);
 		//this.debug(data);
 		this._data = data;
-		
+
 		// trigger onSync events
 		$(this).trigger('message.jsSO', [data]);
 	},
@@ -165,7 +165,7 @@ $.extend(jsSO, {
 	callArgsArray: function(func, args) {
 		var callback = null;
 		var errorCallback = null;
-		
+
 		if ($.isFunction(args[args.length-1])) {
 			callback = args.pop();
 			if ($.isFunction(args[args.length-1])) {
@@ -173,7 +173,7 @@ $.extend(jsSO, {
 				callback = args.pop();
 			}
 		}
-		
+
 		this._lastCallbackId++;
 		var call = this._calls[this._lastCallbackId] = {
 			func: func,
@@ -188,9 +188,9 @@ $.extend(jsSO, {
 				return this;
 			}
 		};
-		
+
 		this._swf().call(this._lastCallbackId, func, args);
-		
+
 		return call;
 	},
 	fcbCallResponse: function(id, response) {
@@ -198,7 +198,7 @@ $.extend(jsSO, {
 		if (!call) {
 			throw new Exception('call not found!');
 		}
-		
+
 		this.debug('fcbCallResponse for '+call.func);
 		$(this).trigger('callResponse.jsSO', call, response);
 

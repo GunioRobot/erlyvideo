@@ -113,11 +113,11 @@ handle_info({inet_async, ListSock, Ref, {ok, CliSocket}},
         error_logger:error_msg("Error setting socket options: ~p.\n", [Reason]),
         {stop, Reason, State}
     end;
-    
+
 handle_info({inet_async, ListSock, Ref, Error}, #rtsp_listener{listener=ListSock, acceptor=Ref} = State) ->
     error_logger:error_msg("Error in socket acceptor: ~p.\n", [Error]),
     {stop, Error, State};
-    
+
 handle_info({clients, _From}, #rtsp_listener{} = State) ->
   ?D("Asked for clients list"),
   {noreply, State};

@@ -1,4 +1,4 @@
-import flash.display.Sprite;  
+import flash.display.Sprite;
 import flash.net.NetConnection;
 import flash.events.NetStatusEvent;
 import flash.events.SecurityErrorEvent;
@@ -9,17 +9,17 @@ import flash.text.TextField;
 import VideoSource;
 import VideoStream;
 import mx.controls.Alert;
-	
+
 public function init()  : void
 {
   System.useCodePage = true;
   VideoSource.source.connect();
-	
+
 	if (Application.application.parameters.file) {
   	player1.player_url.text = Application.application.parameters.file;
 	}
 /*  player2.player_url.text = "dragonball.mp4";*/
-	
+
 	Application.application.parameters.player1 = player1;
 /*  Application.application.parameters.player2 = player2;*/
 }

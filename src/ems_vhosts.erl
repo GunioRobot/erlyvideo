@@ -10,7 +10,7 @@ start() ->
     {ok, Hosts} when is_list(Hosts) -> init_vhosts(Hosts);
     _ -> ok
   end.
-  
+
 
 init_vhosts([]) ->
   ok;

@@ -80,19 +80,19 @@ init([URL, Type, Opts]) when is_binary(URL)->
 init([URL, mpeg_ts_passive, _Opts]) ->
   process_flag(trap_exit, true),
   {ok, #ts_lander{url = URL, pids = [#stream{pid = 0, handler = pat}]}};
-  
+
 init([URL, mpeg_ts, _Opts]) ->
   process_flag(trap_exit, true),
   {_, _, Host, Port, Path, Query} = http_uri:parse(URL),
   {ok, Socket} = gen_tcp:connect(Host, Port, [binary, {packet, http_bin}, {active, false}], 1000),
   gen_tcp:send(Socket, "GET "++Path++"?"++Query++" HTTP/1.0\r\n\r\n"),
   ok = inet:setopts(Socket, [{active, once}]),
-  
+
   {ok, #ts_lander{socket = Socket, url = URL, pids = [#stream{pid = 0, handler = pat}]}}.
-  
+
   % io:format("HTTP Request ~p~n", [RequestId]),
   % {ok, #ts_lander{request_id = RequestId, url = URL, pids = [#stream{pid = 0, handler = pat}]}}.
-    
+
 
 
 %%-------------------------------------------------------------------------
@@ -207,7 +207,7 @@ handle_info({tcp, _Socket, Bin}, #ts_lander{buffer = Buf, byte_counter = Counter
 
 handle_info({tcp_closed, Socket}, #ts_lander{socket = Socket} = TSLander) ->
   {stop, normal, TSLander#ts_lander{socket = undefined}};
-  
+
 handle_info(stop, #ts_lander{socket = Socket} = TSLander) ->
   gen_tcp:close(Socket),
   {stop, normal, TSLander#ts_lander{socket = undefined}};
@@ -246,23 +246,23 @@ demux(#ts_lander{pids = Pids} = TSLander, <<16#47, _:1, PayloadStart:1, _:1, Pid
     false ->
       TSLander
   end.
-  
-      
+
+
 
 ts_payload(<<16#47, _TEI:1, _Start:1, _Priority:1, _Pid:13, _Scrambling:2, 0:1, 1:1, _Counter:4, Payload/binary>>)  -> Payload;
 
-ts_payload(<<16#47, _TEI:1, _Start:1, _Priority:1, _Pid:13, _Scrambling:2, 1:1, 1:1, _Counter:4, 
+ts_payload(<<16#47, _TEI:1, _Start:1, _Priority:1, _Pid:13, _Scrambling:2, 1:1, 1:1, _Counter:4,
               AdaptationLength, _AdaptationField:AdaptationLength/binary, Payload/binary>>) -> Payload;
 
-ts_payload(<<16#47, _TEI:1, _Start:1, _Priority:1, _Pid:13, _Scrambling:2, 
+ts_payload(<<16#47, _TEI:1, _Start:1, _Priority:1, _Pid:13, _Scrambling:2,
               _Adaptation:1, 0:1, _Counter:4, _Payload/binary>>)  ->
   ?D({"Empty payload on pid", _Pid}),
   <<>>.
 
 adaptation_field(<<16#47, _:18, 0:1, _:5, _/binary>>, Header) -> Header;
-adaptation_field(<<16#47, _:18, 1:1, _:5, AdaptationLength, AdaptationField:AdaptationLength/binary, _/binary>>, Header) when AdaptationLength > 0 -> 
+adaptation_field(<<16#47, _:18, 1:1, _:5, AdaptationLength, AdaptationField:AdaptationLength/binary, _/binary>>, Header) when AdaptationLength > 0 ->
   parse_adaptation_field(AdaptationField, Header);
-  
+
 adaptation_field(_, Header) -> Header.
 
 
@@ -274,7 +274,7 @@ parse_adaptation_field(<<Pcr1:33, Pcr2:9, Rest/bitstring>>, 1, OPCR, Header) ->
 
 parse_adaptation_field(<<OPcr1:33, OPcr2:9, _Rest/bitstring>>, 0, 1, Header) ->
   Header#ts_header{opcr = round((OPcr1 * 300 + OPcr2) / 27000)};
-  
+
 parse_adaptation_field(_, 0, 0, Field) -> Field.
 
 
@@ -301,9 +301,9 @@ extract_pat(<<ProgramNum:16, _:3, Pid:13, PAT/binary>>, ProgramCount, Descriptor
 
 
 
-pmt(<<_Pointer, 2, _SectionInd:1, 0:1, 2#11:2, SectionLength:12, 
+pmt(<<_Pointer, 2, _SectionInd:1, 0:1, 2#11:2, SectionLength:12,
     ProgramNum:16, _:2, _Version:5, _CurrentNext:1, _SectionNumber,
-    _LastSectionNumber, _:3, _PCRPID:13, _:4, ProgramInfoLength:12, 
+    _LastSectionNumber, _:3, _PCRPID:13, _:4, ProgramInfoLength:12,
     _ProgramInfo:ProgramInfoLength/binary, PMT/binary>>, #ts_lander{pids = Pids} = TSLander, _, _) ->
   _SectionCount = round(SectionLength - 13),
   % io:format("Program ~p v~p. PCR: ~p~n", [ProgramNum, _Version, PCRPID]),
@@ -328,7 +328,7 @@ pmt(<<_Pointer, 2, _SectionInd:1, 0:1, 2#11:2, SectionLength:12,
 extract_pmt(<<StreamType, 2#111:3, Pid:13, _:4, ESLength:12, _ES:ESLength/binary, Rest/binary>>, Descriptors) ->
   ?D({"Pid -> Type", Pid, StreamType}),
   extract_pmt(Rest, [#stream{handler = pes, counter = 0, pid = Pid, type = stream_type(StreamType)}|Descriptors]);
-  
+
 extract_pmt(_CRC32, Descriptors) ->
   % io:format("Unknown PMT: ~p~n", [PMT]),
   lists:keysort(#stream.pid, Descriptors).
@@ -351,7 +351,7 @@ pes(#stream{synced = false, pid = Pid} = Stream) ->
     Other ->
       ?D({"Undefined message to pid", Pid, Other})
   end;
-  
+
 pes(#stream{synced = true, pid = Pid, ts_buffer = Buf} = Stream) ->
   receive
     {ts_packet, #ts_header{payload_start = 0}, Packet} ->
@@ -368,8 +368,8 @@ pes(#stream{synced = true, pid = Pid, ts_buffer = Buf} = Stream) ->
     Other ->
       ?D({"Undefined message to pid", Pid, Other})
   end.
-    
-      
+
+
 pes_packet(_, #stream{type = unhandled} = Stream, _) -> Stream#stream{ts_buffer = []};
 
 pes_packet(<<1:24, _:5/binary, Length, _PESHeader:Length/binary, Data/binary>> = Packet, #stream{type = audio, es_buffer = Buffer} = Stream, Header) ->
@@ -377,7 +377,7 @@ pes_packet(<<1:24, _:5/binary, Length, _PESHeader:Length/binary, Data/binary>> =
   % ?D({"Audio", Stream1#stream.timestamp, <<Buffer/binary, Data/binary>>}),
   % Stream1;
   decode_aac(Stream1#stream{es_buffer = <<Buffer/binary, Data/binary>>});
-  
+
 pes_packet(<<1:24, _:5/binary, PESHeaderLength, _PESHeader:PESHeaderLength/binary, Rest/binary>> = Packet, #stream{es_buffer = Buffer, type = video} = Stream, Header) ->
   % ?D({"Timestamp1", Stream#stream.timestamp, Stream#stream.start_time}),
   Stream1 = stream_timestamp(Packet, Stream, Header),
@@ -393,7 +393,7 @@ stream_timestamp(<<_:7/binary, 2#11:2, _:6, PESHeaderLength, PESHeader:PESHeader
   <<3:4/integer, _:36/integer, 1:4/integer, Dts3:3/integer, 1:1/integer, Dts2:15/integer, 1:1/integer, Dts1:15/integer, 1:1/integer>> = PESHeader,
   % ?D({"Have DTS & PTS", round((Dts1 + (Dts2 bsl 15) + (Dts3 bsl 30))/90)}),
   normalize_timestamp(Stream#stream{dts = round((Dts1 + (Dts2 bsl 15) + (Dts3 bsl 30))/90)});
-  
+
 
 stream_timestamp(<<_:7/binary, 2#10:2, _:6, PESHeaderLength, PESHeader:PESHeaderLength/binary, _/binary>>, Stream, _Header) ->
   <<2:4/integer, Pts3:3/integer, 1:1/integer, Pts2:15/integer, 1:1/integer, Pts1:15/integer, 1:1/integer>> = PESHeader,
@@ -408,13 +408,13 @@ stream_timestamp(_, #stream{timestamp = TimeStamp} = Stream, _) ->
   Stream#stream{timestamp = TimeStamp + 40}.
 
 % normalize_timestamp(Stream) -> Stream;
-normalize_timestamp(#stream{start_dts = 0, dts = DTS} = Stream) when is_integer(DTS) andalso DTS > 0 -> 
+normalize_timestamp(#stream{start_dts = 0, dts = DTS} = Stream) when is_integer(DTS) andalso DTS > 0 ->
   Stream#stream{start_dts = DTS, timestamp = 0, dts = 0};
-normalize_timestamp(#stream{start_dts = Start, dts = DTS} = Stream) when is_integer(DTS) andalso DTS > 0 -> 
+normalize_timestamp(#stream{start_dts = Start, dts = DTS} = Stream) when is_integer(DTS) andalso DTS > 0 ->
   Stream#stream{timestamp = DTS - Start, dts = 0};
-normalize_timestamp(#stream{start_pcr = 0, pcr = PCR} = Stream) when is_integer(PCR) andalso PCR > 0 -> 
+normalize_timestamp(#stream{start_pcr = 0, pcr = PCR} = Stream) when is_integer(PCR) andalso PCR > 0 ->
   Stream#stream{start_pcr = PCR, timestamp = 0, pcr = 0};
-normalize_timestamp(#stream{start_pcr = Start, pcr = PCR} = Stream) -> 
+normalize_timestamp(#stream{start_pcr = Start, pcr = PCR} = Stream) ->
   Stream#stream{timestamp = PCR - Start, pcr = 0}.
 % normalize_timestamp(Stream) -> Stream.
 
@@ -422,7 +422,7 @@ normalize_timestamp(#stream{start_pcr = Start, pcr = PCR} = Stream) ->
 decode_aac(#stream{send_audio_config = false, consumer = Consumer} = Stream) ->
   % Config = <<16#A:4, 3:2, 1:1, 1:1, 0>>,
   Config = <<18,16,6>>,
-  AudioConfig = #video_frame{       
+  AudioConfig = #video_frame{
    	type          = audio,
    	decoder_config = true,
 		timestamp      = 0,
@@ -435,7 +435,7 @@ decode_aac(#stream{send_audio_config = false, consumer = Consumer} = Stream) ->
 	Consumer ! AudioConfig,
   % ?D({"Send audio config", AudioConfig}),
 	decode_aac(Stream#stream{send_audio_config = true});
-  
+
 
 decode_aac(#stream{es_buffer = <<_Syncword:12, _ID:1, _Layer:2, 0:1, _Profile:2, _Sampling:4,
                                  _Private:1, _Channel:3, _Original:1, _Home:1, _Copyright:1, _CopyrightStart:1,
@@ -451,7 +451,7 @@ decode_aac(#stream{es_buffer = <<_Syncword:12, _ID:1, _Layer:2, _ProtectionAbsen
 
 send_aac(#stream{es_buffer = Data, consumer = Consumer, timestamp = Timestamp} = Stream) ->
   % ?D({"Audio", Timestamp, Data}),
-  AudioFrame = #video_frame{       
+  AudioFrame = #video_frame{
     type          = audio,
     timestamp     = Timestamp,
     body          = Data,
@@ -462,27 +462,27 @@ send_aac(#stream{es_buffer = Data, consumer = Consumer, timestamp = Timestamp} =
   },
   Consumer ! AudioFrame,
   Stream#stream{es_buffer = <<>>}.
-  
+
 
 decode_avc(#stream{es_buffer = <<16#000001:24, _/binary>>} = Stream) ->
   find_nal_end(Stream, 3);
-  
+
 decode_avc(#stream{es_buffer = Data} = Stream) ->
   % io:format("PES ~p ~p ~p ~p, ~p, ~p~n", [StreamId, _DataAlignmentIndicator, _PesPacketLength, PESHeaderLength, PESHeader, Rest]),
   % io:format("PES ~p ~p ~p ~p, ~p, ~p~n", [StreamId, _DataAlignmentIndicator, _PesPacketLength, PESHeaderLength, PESHeader, Rest]),
   Offset1 = nal_unit_start_code_finder(Data, 0) + 3,
   find_nal_end(Stream, Offset1).
-  
-find_nal_end(Stream, false) ->  
+
+find_nal_end(Stream, false) ->
   Stream;
-  
+
 find_nal_end(#stream{es_buffer = Data} = Stream, Offset1) ->
   Offset2 = nal_unit_start_code_finder(Data, Offset1+3),
   extract_nal(Stream, Offset1, Offset2).
 
 extract_nal(Stream, _, false) ->
   Stream;
-  
+
 extract_nal(#stream{es_buffer = Data, consumer = Consumer, timestamp = Timestamp, h264 = H264} = Stream, Offset1, Offset2) ->
   Length = Offset2-Offset1,
   <<_:Offset1/binary, NAL:Length/binary, Rest1/binary>> = Data,

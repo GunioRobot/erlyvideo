@@ -1,11 +1,11 @@
 % ==========================================================================================================
 % MISULTIN - Include file
-% 
+%
 % Copyright (C) 2009, Sean Hinde, Roberto Ostinelli <roberto@ostinelli.net>
 % All rights reserved.
 %
 % BSD License
-% 
+%
 % Redistribution and use in source and binary forms, with or without modification, are permitted provided
 % that the following conditions are met:
 %
@@ -66,7 +66,7 @@
 					erlang:apply(error_logger, info_msg, [lists:concat(["[DEBUG]	module: ", ?MODULE, "~n	line: ", ?LINE, "~n", Str, "~n"]), Args]);
 				_ ->
 					ok
-			end;			
+			end;
 		_ ->
 			ok
 	end

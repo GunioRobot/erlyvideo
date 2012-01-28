@@ -60,17 +60,17 @@
 
 start_link(MediaEntry, Options) ->
   {ok, spawn_link(?MODULE, init, [MediaEntry, Options])}.
-  
+
 client(Player) ->
   Ref = erlang:make_ref(),
   Player ! {client, self(), Ref},
-  receive 
+  receive
     {Info, Ref} -> Info
   after 100 ->
     {undefined, undefined}
   end.
 
-  
+
 init(MediaEntry, Options) ->
   Consumer = proplists:get_value(consumer, Options),
   ?D({"Starting stream play for consumer", Consumer}),
@@ -79,21 +79,21 @@ init(MediaEntry, Options) ->
   ?MODULE:ready(#stream_player{consumer = Consumer,
                       stream_id = proplists:get_value(stream_id, Options, undefined),
                       media_info = MediaEntry}).
-  
-	
+
+
 ready(#stream_player{consumer = Consumer} = State) ->
   receive
     {client_buffer, _ClientBuffer} ->
       ?MODULE:ready(State);
-      
+
     start ->
       erlang:yield(),
       ?MODULE:ready(State);
-      
+
     {client, Pid, Ref} ->
       Pid ! {gen_fsm:sync_send_event(Consumer, info), Ref},
       ?MODULE:ready(State);
-      
+
     pause ->
       ?D("Player paused"),
       ?MODULE:ready(State#stream_player{paused = true});
@@ -101,7 +101,7 @@ ready(#stream_player{consumer = Consumer} = State) ->
     resume ->
       ?D("Player resumed"),
       ?MODULE:ready(State#stream_player{paused = false});
-      
+
     {send_audio, Audio} ->
       ?D({"Send audio", Audio}),
       ?MODULE:ready(State#stream_player{send_audio = Audio});
@@ -113,26 +113,26 @@ ready(#stream_player{consumer = Consumer} = State) ->
     {seek, Timestamp} ->
       ?D({"Requested to seek in stream", Timestamp}),
       ?MODULE:ready(State);
-      
+
     {data, Data} ->
       gen_fsm:send_event(Consumer, {send, Data}),
       ?MODULE:ready(State);
 
     #video_frame{} = Frame ->
       send_frame(State, Frame);
-      
+
     eof ->
       ?D("MPEG TS finished"),
       ok;
-    
-    stop -> 
+
+    stop ->
       ?D({"stream play stop", self()}),
       ok;
-  
+
     exit ->
       ?D({"stream play exit", self(), State#stream_player.media_info}),
       ok;
-      
+
   	{tcp_closed, _Socket} ->
       error_logger:info_msg("~p Video player lost connection.\n", [self()]),
       ok;
@@ -158,7 +158,7 @@ send_frame(#stream_player{synced = false} = Player, #video_frame{decoder_config 
 send_frame(#stream_player{base_ts = undefined} = Player, #video_frame{timestamp = Ts} = Frame) when is_number(Ts) andalso Ts > 0 ->
   send_frame(Player#stream_player{base_ts = Ts}, Frame);
 
-send_frame(#stream_player{consumer = Consumer, stream_id = StreamId, base_ts = BaseTs} = Player, 
+send_frame(#stream_player{consumer = Consumer, stream_id = StreamId, base_ts = BaseTs} = Player,
            #video_frame{timestamp = Ts, decoder_config = Decoder, type = Type} = Frame) ->
   Timestamp = case BaseTs of
     undefined -> 0;

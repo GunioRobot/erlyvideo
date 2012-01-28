@@ -12,7 +12,7 @@
 %%--------------------------------------------------------------------
 %% @spec () -> any()
 %% @doc A startup function for whole supervisor. Started by application
-%% @end 
+%% @end
 %%--------------------------------------------------------------------
 -spec(start_link() -> {error,_} | {ok,pid()}).
 start_link() ->
@@ -31,7 +31,7 @@ start_rtsp_listener(Port, Name, Callback) ->
   worker,
   [rtsp_listener]},
   supervisor:start_child(?MODULE, Listener).
-  
+
 
 init([rtsp_connection]) ->
   {ok,
@@ -109,5 +109,5 @@ init([]) ->
       []                                       % Modules  = [Module] | dynamic
     }
   ],
-  
+
   {ok, {{one_for_one, 3, 10}, Supervisors}}.

@@ -1,5 +1,5 @@
 package {
-import flash.display.Sprite;  
+import flash.display.Sprite;
 import flash.net.NetConnection;
 import flash.events.NetStatusEvent;
 import flash.events.SecurityErrorEvent;
@@ -26,7 +26,7 @@ public class push extends Sprite
 		_cookie = parameters.session;
 		_connectTimer = new Timer(delay, repeat);
 		_connectTimer.addEventListener(TimerEvent.TIMER, connect);
-		
+
 		ExternalInterface.call("netconnection.initialized", _server);
 	  connect();
 	}
@@ -52,7 +52,7 @@ public class push extends Sprite
 			}
 	    _connected = true;
 			break;
-		
+
 		case "NetConnection.Message":
 			try {
 				var re:RegExp = /\\/g;
@@ -61,7 +61,7 @@ public class push extends Sprite
 			catch (e:Object) {
 			}
 	    break;
-    
+
 	  case "NetConnection.Connect.Failed":
 			try {
 				ExternalInterface.call("netconnection.failed");
@@ -71,7 +71,7 @@ public class push extends Sprite
 			_connected = false;
 			_connectTimer.start();
 	    break;
-	
+
 		}
 	}
 

@@ -20,11 +20,11 @@
 
     <div class="container">
       <div class="span-24 last"><h3><a href="/">Main page</a></h3></div>
-      
+
       <div class="span-24 last">
         <h3>Chat</h3>
         <div id="chat" style="height: 300px; overflow: scroll">
-          
+
         </div>
         <form action="/channels/10/message" method="post" onsubmit="try {var self = $(this); var postData = self.serialize(); self.find('input').attr('disabled', true); $.post(this.action, postData, function() {self.find('input[type=text]').val(''); self.find('input').attr('disabled', false);}, 'text'); } catch(e) { alert(e);}; return false">
           <input type="text" name="message">

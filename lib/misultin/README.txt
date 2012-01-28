@@ -13,7 +13,7 @@ INSTALL INSTRUCTIONS
 Run the appropriate script:
 
     * OSX | Linux users: ./compile
-    * Windows users: compile.bat. Note that Erlang bin directory (by default, C:\Program Files\erl5.7.2\bin\) must be in your path for the script to work. 
+    * Windows users: compile.bat. Note that Erlang bin directory (by default, C:\Program Files\erl5.7.2\bin\) must be in your path for the script to work.
 
 This script will compile the .erl files in the Misultin src directory and save the compiled files into the ebin directory. Optionally, you may consider setting a logging level with the compile options: run the script with the -h option for more information.
 
@@ -26,7 +26,7 @@ Locate the directory where Erlang is installed on your system. Under OSX and Lin
 Browse into the lib directory under this Erlang root and copy the root misultin-0.x directory into this directory. You should now have Misultin under something similar to:
 
     * OSX | Linux users: /usr/local/lib/erlang/lib/misultin-0.x/
-    * Windows users: C:\Program Files\erl5.7.2\lib\misultin-0.x\ 
+    * Windows users: C:\Program Files\erl5.7.2\lib\misultin-0.x\
 
 3. Test
 

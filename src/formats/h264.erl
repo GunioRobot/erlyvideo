@@ -17,7 +17,7 @@ fake_dump_nal(_File, _Nal) -> ok.
 open_dump() ->
   {ok, File} = file:open("out.x264", [write, binary]),
   File.
-  
+
 dump_nal(File, NAL) ->
   file:write(File, <<0,0,1, NAL/binary>>).
 
@@ -34,7 +34,7 @@ video_config(H264) ->
   case decoder_config(H264) of
     ok -> {H264, []};
     DecoderConfig when is_binary(DecoderConfig) ->
-      Frame = #video_frame{       
+      Frame = #video_frame{
        	type          = video,
        	decoder_config = true,
     		timestamp     = 0,
@@ -44,7 +44,7 @@ video_config(H264) ->
     	},
     	{H264, [Frame]}
   end.
-      
+
 
 decoder_config(#h264{sps = undefined}) -> ok;
 decoder_config(#h264{pps = undefined}) -> ok;
@@ -53,7 +53,7 @@ decoder_config(#h264{pps = PPS, sps = SPS, profile = Profile, profile_compat = P
   Version = 1,
   SPSBin = iolist_to_binary(SPS),
   PPSBin = iolist_to_binary(PPS),
-  <<Version, Profile, ProfileCompat, Level, 2#111111:6, LengthSize:2, 
+  <<Version, Profile, ProfileCompat, Level, 2#111111:6, LengthSize:2,
     2#111:3, (length(SPS)):5, (size(SPSBin)):16, SPSBin/binary,
     (length(PPS)), (size(PPSBin)):16, PPSBin/binary>>.
 
@@ -110,7 +110,7 @@ decode_nal(<<0:1, _NalRefIdc:2, ?NAL_SEI:5, _/binary>> = Data, #h264{dump_file =
 		frame_type    = frame,
 		codec_id      = avc
   },
-  
+
   {H264, []};
 
 decode_nal(<<0:1, _NalRefIdc:2, ?NAL_SPS:5, Profile, _:8, Level, _/binary>> = SPS, #h264{dump_file = File} = H264) ->
@@ -147,7 +147,7 @@ decode_nal(<<0:1, _NalRefIdc:2, ?NAL_DELIM:5, _PrimaryPicTypeId:3, _:5, _/binary
   {H264, [VideoFrame]};
 
 
-  
+
 decode_nal(<<0:1, _NRI:2, ?NAL_STAP_A:5, Rest/binary>>, H264) ->
   decode_stapa(Rest, [], H264);
 
@@ -178,14 +178,14 @@ decode_nal(<<0:1, _NRI:2, ?NAL_FUA:5, 0:1, 1:1, 0:1, Type:5, Rest/binary>>, #h26
 decode_nal(<<0:1, _NalRefIdc:2, _NalUnitType:5, _/binary>>, H264) ->
   io:format("Unknown NAL unit type ~p~n", [_NalUnitType]),
   {H264, []}.
-  
+
 decode_stapa(<<Size:16, NAL:Size/binary, Rest/binary>>, Frames, H264) ->
   {H264_1, NewFrames} = decode_nal(NAL, H264),
   decode_stapa(Rest, Frames ++ NewFrames, H264_1);
-  
+
 decode_stapa(<<>>, Frames, H264) ->
   {H264, Frames}.
-  
+
 nal_with_size(NAL) -> <<(size(NAL)):32, NAL/binary>>.
 
 remove_trailing_zero(Bin) ->
@@ -233,7 +233,7 @@ slice_type(_) -> undefined.
 
 exp_golomb_read_list(Bin, List) ->
   exp_golomb_read_list(Bin, List, []).
-  
+
 exp_golomb_read_list(Bin, [], Results) -> {Results, Bin};
 exp_golomb_read_list(Bin, [Key | Keys], Results) ->
   {Value, Rest} = exp_golomb_read(Bin),
@@ -248,7 +248,7 @@ exp_golomb_read_s(Bin) ->
 
 exp_golomb_read(Bin) ->
   exp_golomb_read(Bin, 0).
-  
+
 exp_golomb_read(<<0:1, Rest/bitstring>>, LeadingZeros) ->
   exp_golomb_read(Rest, LeadingZeros + 1);
 

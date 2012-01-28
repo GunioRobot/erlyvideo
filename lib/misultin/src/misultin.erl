@@ -2,7 +2,7 @@
 % MISULTIN - Main
 %
 % >-|-|-(°>
-% 
+%
 % Copyright (C) 2009, Roberto Ostinelli <roberto@ostinelli.net>, Sean Hinde.
 % All rights reserved.
 %
@@ -10,7 +10,7 @@
 % <http://www.trapexit.org/A_fast_web_server_demonstrating_some_undocumented_Erlang_features>
 %
 % BSD License
-% 
+%
 % Redistribution and use in source and binary forms, with or without modification, are permitted provided
 % that the following conditions are met:
 %
@@ -220,14 +220,14 @@ get_option({OptionName, DefaultValue, CheckAndConvertFun, FailTypeError}, Option
 			case DefaultValue of
 				{error, Reason} ->
 					{error, Reason};
-				Value -> 
+				Value ->
 					{OptionName, Value}
 			end;
 		Value ->
 			case CheckAndConvertFun(Value) of
 				false ->
 					{error, {FailTypeError, Value}};
-				true -> 
+				true ->
 					{OptionName, Value};
 				OutValue ->
 					{OptionName, OutValue}

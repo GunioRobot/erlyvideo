@@ -2,7 +2,7 @@
 % MISULTIN - Socket
 %
 % >-|-|-(°>
-% 
+%
 % Copyright (C) 2009, Roberto Ostinelli <roberto@ostinelli.net>, Sean Hinde.
 % All rights reserved.
 %
@@ -10,7 +10,7 @@
 % <http://www.trapexit.org/A_fast_web_server_demonstrating_some_undocumented_Erlang_features>
 %
 % BSD License
-% 
+%
 % Redistribution and use in source and binary forms, with or without modification, are permitted provided
 % that the following conditions are met:
 %
@@ -100,7 +100,7 @@ listener(ListenSocket, ListenPort, Loop, RecvTimeout) ->
 
 % ============================ \/ INTERNAL FUNCTIONS =======================================================
 
-% REQUEST: wait for a HTTP Request line. Transition to state headers if one is received. 
+% REQUEST: wait for a HTTP Request line. Transition to state headers if one is received.
 request(#c{sock = Sock, recv_timeout = RecvTimeout} = C, Req) ->
 	inet:setopts(Sock, [{active, once}]),
 	receive
@@ -113,7 +113,7 @@ request(#c{sock = Sock, recv_timeout = RecvTimeout} = C, Req) ->
 			?MODULE:request(C, Req);
 		{http, Sock, _Other} ->
 			?DEBUG(debug, "tcp normal error treating request: ~p", [_Other]),
-			exit(normal)	
+			exit(normal)
 	after RecvTimeout ->
 		?DEBUG(debug, "request timeout, sending error", []),
 		send(Sock, ?REQUEST_TIMEOUT_408)
@@ -188,7 +188,7 @@ body(#c{sock = Sock, recv_timeout = RecvTimeout} = C, Req) ->
 					?MODULE:request(C, #req{peer_addr = Req#req.peer_addr, peer_port = Req#req.peer_port})
 			end;
 		'POST' ->
-			case catch list_to_integer(Req#req.content_length) of 
+			case catch list_to_integer(Req#req.content_length) of
 				{'EXIT', _} ->
 					% TODO: provide a fallback when content length is not or wrongly specified
 					?DEBUG(debug, "specified content length is not a valid integer number: ~p", [Req#req.content_length]),
@@ -208,7 +208,7 @@ body(#c{sock = Sock, recv_timeout = RecvTimeout} = C, Req) ->
 							end;
 						{error, timeout} ->
 							?DEBUG(debug, "request timeout, sending error", []),
-							send(Sock, ?REQUEST_TIMEOUT_408);	
+							send(Sock, ?REQUEST_TIMEOUT_408);
 						_Other ->
 							?DEBUG(debug, "tcp normal error treating post: ~p", [_Other]),
 							exit(normal)
@@ -298,7 +298,7 @@ call_mfa(#c{sock = Sock, loop = Loop} = C, Request) ->
 		_ ->
 			% loop exited normally, kill listening socket
 			SocketPid ! shutdown
-	catch	
+	catch
 		exit:leave ->
 		  exit(normal);
 		_Class:_Error ->
@@ -393,5 +393,5 @@ close(Sock) ->
 			?DEBUG(debug, "could not close socket: ~p", [_Reason]),
 			exit(normal)
 	end.
-	
+
 % ============================ /\ INTERNAL FUNCTIONS =======================================================

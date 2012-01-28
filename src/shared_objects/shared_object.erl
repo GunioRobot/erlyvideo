@@ -19,7 +19,7 @@
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
          code_change/3]).
-         
+
 -export([message/2]).
 
 %%--------------------------------------------------------------------
@@ -54,7 +54,7 @@ init([Host, Name, Persistent]) ->
   {Data, Version} = load(Host, Name, Persistent),
   ?D({"Loaded", Host, Name, Data}),
   {ok, #so_state{host = Host, name = Name, persistent = Persistent, data = Data, version = Version}}.
-  
+
 
 %%-------------------------------------------------------------------------
 %% @spec (Request, From, State) -> {reply, Reply, State}          |
@@ -87,12 +87,12 @@ handle_event([connect | Events], Client, #so_state{clients = Clients, data = _Da
   handle_event(Events, Client, State#so_state{clients = [Client | Clients]});
 
 handle_event([{set_attribute, {Key, Value}} | Events], Client, #so_state{name = Name, version = Version, persistent = P, data = Data, clients = Clients} = State) ->
-  
+
   NewState = State#so_state{data = lists:keystore(Key, 1, Data, {Key, Value}), version = Version+1},
   save(NewState),
   AuthorReply = #so_message{name = Name, version = Version, persistent = P, events = [{update_attribute, Key}]},
   rtmp_session:send(Client, #rtmp_message{type = shared_object, body = AuthorReply}),
-  
+
   OtherReply = #so_message{name = Name, version = Version+1, persistent = P, events = [{update_data, [{Key, Value}]}]},
   Message = #rtmp_message{type = shared_object, body = OtherReply},
   ClientList = lists:delete(Client, Clients),
@@ -105,7 +105,7 @@ handle_event([{send_message, {Function, Args}} | Events], Client, #so_state{name
   Message = #rtmp_message{type = shared_object, body = Reply},
   [rtmp_session:send(C, Message) || C <- Clients],
   handle_event(Events, Client, State);
-  
+
 handle_event([{Event, EventData} | Events], Client, State) ->
   ?D({"Unknown event", Event, EventData}),
   handle_event(Events, Client, State);
@@ -113,7 +113,7 @@ handle_event([{Event, EventData} | Events], Client, State) ->
 handle_event([Event | Events], Client, State) ->
   ?D({"Unknown event", Event}),
   handle_event(Events, Client, State).
-  
+
 
 connect_notify(Client, #so_state{name = Name, version = Version, persistent = P, data = []}) ->
   Reply = #so_message{name = Name, version = Version, persistent = P, events = [initial_data]},
@@ -125,7 +125,7 @@ connect_notify(Client, #so_state{name = Name, version = Version, persistent = P,
   rtmp_session:send(Client, #rtmp_message{type = shared_object, body = Reply}).
 
 save(#so_state{persistent = false}) -> ok;
-save(#so_state{host = Host, name = Name, data = Data, version = Version}) -> 
+save(#so_state{host = Host, name = Name, data = Data, version = Version}) ->
   ?D({"Saving", Host, Name, Data}),
   mnesia:transaction(fun() ->
     mnesia:write(#shared_object{key={Host, Name}, version=Version, data=Data})
@@ -162,7 +162,7 @@ handle_cast(_Msg, State) ->
 %% @end
 %% @private
 %%-------------------------------------------------------------------------
-% 
+%
 
 handle_info({'EXIT', Client, _Reason}, #so_state{clients = Clients} = State) ->
   NewClients = lists:delete(Client, Clients),

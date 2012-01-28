@@ -13,4 +13,4 @@
 {"deps/rtmp/src/*", [{outdir, "deps/rtmp/ebin"}, {i, "deps/rtmp/src"}]}.
 {"deps/log4erl/src/*", [{outdir, "deps/log4erl/ebin"}, {i, "deps/log4erl/include"}]}.
 {"deps/erlydtl/src/erlydtl/*", [{outdir, "deps/erlydtl/ebin"}, {i, "deps/erlydtl/include"}]}.
-% debug_info, bin_opt_info, 
+% debug_info, bin_opt_info,

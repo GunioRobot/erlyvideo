@@ -1,4 +1,4 @@
-package 
+package
 {
 	import mx.core.UIComponent;
 	import flash.events.Event;
@@ -23,12 +23,12 @@ package
 			rawChildren.addChild(_video);
 			addEventListener(Event.RESIZE, resizeHandler);
 		}
-		
+
 		public function get video() : Video
 		{
 			return _video;
 		}
-		
+
 		private function resizeHandler(event:Event):void
 		{
 			if (_video != null)

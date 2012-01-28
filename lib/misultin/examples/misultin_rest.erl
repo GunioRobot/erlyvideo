@@ -2,12 +2,12 @@
 % MISULTIN - Example: RESTful support.
 %
 % >-|-|-(°>
-% 
+%
 % Copyright (C) 2009, Roberto Ostinelli <roberto@ostinelli.net>
 % All rights reserved.
 %
 % BSD License
-% 
+%
 % Redistribution and use in source and binary forms, with or without modification, are permitted provided
 % that the following conditions are met:
 %
@@ -64,5 +64,5 @@ handle('GET', ["users", UserName, "messages"], Req) ->
 % handle the 404 page not found
 handle(_, _, Req) ->
 	Req:ok([{"Content-Type", "text/plain"}], "Page not found.").
-	
+
 % ---------------------------- /\ handle rest --------------------------------------------------------------

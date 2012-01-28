@@ -4,7 +4,7 @@ Repo moved to http://github.com/erlyvideo/erlyvideo
 
 currently it can:
 
-  * stream, seek, pause and resume mp4 and flv files 
+  * stream, seek, pause and resume mp4 and flv files
   * fast starting of flv playback with building index in background
   * record flv from camera
   * have possibility to auth users
@@ -22,7 +22,7 @@ currently in development:
   * improve handling of background vlc/ffmpeg for them to recode uploaded videos
   * add support for extended play command (with initial seek, length, ets)
 
-  
+
 future plans:
   * MPEG TS restreaming of files
   * Apple HTTP LiveStreaming
@@ -42,7 +42,7 @@ What you can do right now?
 
 
 How can You help?
-  
+
   * Launch it and test on your content;
   * make fork on github, add your improvements and push them to me;
   * take any of “currently in development” issues or future plans and try to make them

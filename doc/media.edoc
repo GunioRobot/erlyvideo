@@ -1,7 +1,7 @@
 @author     Max Lapshin <max@maxidoors.ru> [http://maxidoors.ru]
 @copyright  2009 Max Lapshin
 @reference  See <a href="http://erlyvideo.org/" target="_top">http://erlyvideo.org/</a> for more information
-@version 
+@version
 @title Media structure in Erlyvideo
 @doc Erlyvideo has non-trivial structure of media delivery.
 
@@ -11,7 +11,7 @@ Central point is media_provider server. Basically it provides two functions:
 create media and play media. It's use is to cache opened streams and files.
 Opening new file is a rather expensive procedure, but its caching is very cheap.
 
-So, media_provider has a map of name -> instance of media entries. 
+So, media_provider has a map of name -> instance of media entries.
 
 
 
@@ -40,7 +40,7 @@ Media_stream may be a client of recorded stream from web camera or client of dec
 
 Media playing:
 
-1. media_provider makes lookup in table. 
+1. media_provider makes lookup in table.
 
 2. if media is not found, reader is started, according to requested type. It is possible
 to open file or external stream, like MPEG TS.

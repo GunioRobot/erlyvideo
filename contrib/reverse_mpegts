@@ -18,13 +18,13 @@
 
 main([FromUrl, ToUrl]) ->
   run_loop(#pusher{from_url = FromUrl, to_url = ToUrl}).
-  
-  
+
+
 
 connect_source(From) ->
   {_, _, Host, Port, Path, Query} = http_uri:parse(From),
   case gen_tcp:connect(Host, Port, [binary, {packet, http_bin}, {active, false}], 1000) of
-    {ok, Socket} -> 
+    {ok, Socket} ->
       ?D({"Connected to", From}),
       gen_tcp:send(Socket, "GET "++Path++"?"++Query++" HTTP/1.1\r\nHost: "++Host++"\r\n\r\n"),
       read_response(Socket);
@@ -33,19 +33,19 @@ connect_source(From) ->
       timer:sleep(500),
       connect_source(From)
   end.
-  
+
 read_response(Socket) ->
   inet:setopts(Socket, [{active, once}]),
-  receive 
+  receive
     {http, Socket, {http_response, _Version, 200, _Reply}} ->
       read_headers(Socket);
     Else -> ?D({"ZZ", Else})
   after
-    ?TIMEOUT -> 
+    ?TIMEOUT ->
       ?D({"Timeout reading http response"}),
       false
   end.
-  
+
 read_headers(Socket) ->
   inet:setopts(Socket, [{active, once}]),
   receive
@@ -56,12 +56,12 @@ read_headers(Socket) ->
       ?D({"Connected to source"}),
       Socket
   after
-    ?TIMEOUT -> 
+    ?TIMEOUT ->
       ?D({"Timeout reading http headers"}),
       false
   end.
-  
-    
+
+
 
 
 connect_to(To) ->
@@ -76,7 +76,7 @@ connect_to(To) ->
       timer:sleep(1000),
       connect_to(To)
   end.
-  
+
 
 run_loop(#pusher{from_counter = ?COUNTER, from_url = URL}) ->
   ?D({"Too many connections to ", URL}),
@@ -91,7 +91,7 @@ run_loop(#pusher{from = false, from_counter = Counter} = Pusher) ->
 
 run_loop(#pusher{to = false, to_counter = Counter} = Pusher) ->
   run_loop(Pusher#pusher{to = undefined, to_counter = Counter + 1});
-  
+
 run_loop(#pusher{from = undefined, from_url = URL} = Pusher) ->
   run_loop(Pusher#pusher{from = connect_source(URL)});
 
@@ -113,7 +113,7 @@ run_loop(#pusher{from = From, to = To} = Pusher) ->
       ?D({"Undefined message", Else}),
       run_loop(Pusher)
   after
-    ?TIMEOUT -> 
+    ?TIMEOUT ->
       ?D("Timeout in pusher"),
       ok
   end.

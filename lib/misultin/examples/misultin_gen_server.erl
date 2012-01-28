@@ -2,12 +2,12 @@
 % MISULTIN - Example: Running Misultin from a gen_server.
 %
 % >-|-|-(°>
-% 
+%
 % Copyright (C) 2009, Roberto Ostinelli <roberto@ostinelli.net>
 % All rights reserved.
 %
 % BSD License
-% 
+%
 % Redistribution and use in source and binary forms, with or without modification, are permitted provided
 % that the following conditions are met:
 %
@@ -138,7 +138,7 @@ code_change(_OldVsn, State, _Extra) ->
 
 % ---------------------------- \/ misultin requests --------------------------------------------------------
 
-handle_http(Req) -> 
+handle_http(Req) ->
 	% get params depending on method
 	Method = Req:get(method),
 	case Method of

@@ -23,7 +23,7 @@ ebin:
 ebin/erlmedia.app:
 	cp priv/erlmedia.app ebin/erlmedia.app
 
-doc:	
+doc:
 	$(ERL) -pa `pwd`/ebin \
 	-noshell \
 	-run edoc_run application  "'$(APP_NAME)'" '"."' '[{def,{vsn,"$(VSN)"}}]'
@@ -49,7 +49,7 @@ run: ebin ebin/erlmedia.app
 	-s $(APP_NAME) \
 	-mnesia dir "\"${MNESIA_DATA}\"" \
 	-name $(NODE_NAME)
-	
+
 start: ebin ebin/erlmedia.app
 	ERL_LIBS=deps:lib $(ERL) -pa `pwd`/ebin \
 	-sasl sasl_error_logger '{file, "sasl.log"}' \

@@ -12,7 +12,7 @@ parse_announce([], Streams, undefined) ->
 
 parse_announce([], Streams, Stream) ->
   [Stream | Streams];
-  
+
 parse_announce([{<<"v">>, _} | Announce], Streams, Stream) ->
   parse_announce(Announce, Streams, Stream);
 
@@ -66,7 +66,7 @@ parse_announce([{<<"a">>, <<"fmtp:", Info/binary>>} | Announce], Streams, #rtsp_
     {match, [_, Key, Value]} = re:run(Opt, Re, [{capture, all, list}]),
     {Key, Value}
   end, string:tokens(OptList, ";")),
-  
+
   parse_announce(Announce, Streams, parse_fmtp(Stream, Opts ));
 
 parse_announce([{<<"a">>, _Info} | Announce], Streams, Stream) ->
@@ -92,14 +92,14 @@ parse_fmtp(#rtsp_stream{type = audio} = Stream, Opts) ->
   "3" = proplists:get_value("indexdeltalength", Opts),
   Config = list_to_binary(hmac256:unhex(proplists:get_value("config", Opts))),
   ?D({"audio config", aac:decode_config(Config)}),
-  
+
   % {value, {_, _Mode}, Opts1} = lists:keytake('mode', 1, lists:keysort(1, Opts)),
   % {value, {_, Config}, Opts2} = lists:keytake('config', 1, Opts1),
   % lists:keytake('sizelength', 1, Opts2),
   % lists:keytake('indexlength', 1, Opts2),
   % lists:keytake('indexdeltalength', 1, Opts2),
-  % 
+  %
   % parse_announce(Announce, Streams, [{config, Config} | Stream])
   Stream#rtsp_stream{config = Config}.
-  
-  
+
+

@@ -3,7 +3,7 @@ netconnection.initialized = function(server) {
 	if (console) {
 		console.log("Connecting to rtmp server "+server);
 	}
-  
+
 }
 
 netconnection.connected = function() {

@@ -64,8 +64,8 @@ mux(Data, Req, Pid) ->
   Start = 1,
   Counter = 0,
   mux_parts(Data, Req, Pid, Start, Counter).
-  
-  
+
+
 % 4 bytes header, 188 packet, so data is 184
 mux_parts(<<Data:?TS_PACKET/binary, Rest/binary>>, Req, Pid, Start, Counter) ->
   TEI = 0,
@@ -78,7 +78,7 @@ mux_parts(<<Data:?TS_PACKET/binary, Rest/binary>>, Req, Pid, Start, Counter) ->
   Part = <<16#47, TEI:1, Start:1, Priority:1, Pid:13, Scrambling:2, Adapt:1, HasPayload:1, Counter:4, Data/binary>>,
   Req:stream(Part),
   mux_parts(Rest, Req, Pid, 0, Counter+1);
-  
+
 mux_parts(<<>>, _Req, _Pid, _Start, _Counter) ->
   ok;
 
@@ -95,7 +95,7 @@ mux_parts(Data, Req, Pid, Start, Counter) ->
 
 padding(Padding, 0) -> Padding;
 padding(Padding, Size) -> padding(<<Padding/binary, 255>>, Size - 1).
-  
+
 send_pat(Req) ->
   Programs = <<1:16, 111:3, ?PMT_PID:13>>,
   TSStream = 29998, % Just the same, as VLC does
@@ -122,24 +122,24 @@ send_pmt(Req) ->
   _SectionNumber = 0,
   _LastSectionNumber = 0,
   ProgramInfo = <<29,13,17,1,2,128,128,7,0,79,255,255,254,254,255>>,
-  AudioStream = <<?TYPE_AUDIO_AAC, 2#111:3, ?AUDIO_PID:13, 0:4>>, 
+  AudioStream = <<?TYPE_AUDIO_AAC, 2#111:3, ?AUDIO_PID:13, 0:4>>,
   VideoStream = <<?TYPE_VIDEO_H264, 2#111:3, ?VIDEO_PID:13, 0:4>>,
   Streams = iolist_to_binary([AudioStream, VideoStream]),
-  PMT = <<_Pointer, ?PMT_TABLEID, SectionSyntaxInd:1, 0:1, 2#11:2, SectionLength:12, 
+  PMT = <<_Pointer, ?PMT_TABLEID, SectionSyntaxInd:1, 0:1, 2#11:2, SectionLength:12,
       ProgramNum:16, 0:2, _Version:5, _CurrentNext:1, _SectionNumber,
-      _LastSectionNumber, 0:3, ?PCR_PID:13, 0:4, (size(ProgramInfo)):12, 
+      _LastSectionNumber, 0:3, ?PCR_PID:13, 0:4, (size(ProgramInfo)):12,
       ProgramInfo/binary, Streams/binary, CRC32:32>>,
   mux(PMT, Req, 0),
   ?MODULE:play(Req).
 
-  % <<_Pointer, 2, _SectionInd:1, 0:1, 2#11:2, SectionLength:12, 
+  % <<_Pointer, 2, _SectionInd:1, 0:1, 2#11:2, SectionLength:12,
   %     ProgramNum:16, _:2, _Version:5, _CurrentNext:1, _SectionNumber,
-  %     _LastSectionNumber, _:3, _PCRPID:13, _:4, ProgramInfoLength:12, 
+  %     _LastSectionNumber, _:3, _PCRPID:13, _:4, ProgramInfoLength:12,
   %     _ProgramInfo:ProgramInfoLength/binary, Streams/binary>> =  <<0,2,176,50,0,1,217,0,0,224,69,240,15,29,13,
   %                               17,1,2,128,128,7,0,79,255,255,254,254,255,15,
   %                               224,68,240,6,10,4,101,110,103,0,27,224,69,240,6,
   %                               10,4,101,110,103,0,219,45,131,210>>.
-  % 
+  %
 play(Req) ->
   receive
     #video_frame{} = _Frame ->
@@ -148,7 +148,7 @@ play(Req) ->
     {'EXIT', _, _} ->
       ?D({"MPEG TS reader disconnected"}),
       ok;
-    Message -> 
+    Message ->
       ?D(Message),
       ?MODULE:play(Req)
   after
@@ -156,13 +156,12 @@ play(Req) ->
       ?D("MPEG TS player stopping"),
       ok
   end.
-  
-  
 
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
+
+

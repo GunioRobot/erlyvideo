@@ -2,7 +2,7 @@
 % MISULTIN - Request
 %
 % >-|-|-(°>
-% 
+%
 % Copyright (C) 2009, Roberto Ostinelli <roberto@ostinelli.net>,
 %					  Bob Ippolito <bob@mochimedia.com> for Mochi Media, Inc.
 % All rights reserved.
@@ -11,7 +11,7 @@
 % <http://code.google.com/p/mochiweb/>
 %
 % BSD License
-% 
+%
 % Redistribution and use in source and binary forms, with or without modification, are permitted provided
 % that the following conditions are met:
 %
@@ -73,7 +73,7 @@ respond(HttpCode, Headers, Template) ->
 	{HttpCode, Headers, Template}.
 respond(HttpCode, Headers, Template, Vars) when is_list(Template) =:= true ->
 	{HttpCode, Headers, io_lib:format(Template, Vars)}.
-	
+
 % Description: Start stream.
 stream(close) ->
 	SocketPid ! stream_close;
@@ -87,11 +87,11 @@ stream(Template, Vars) when is_list(Template) =:= true ->
 	SocketPid ! {stream_data, io_lib:format(Template, Vars)}.
 stream(head, HttpCode, Headers) ->
 	SocketPid ! {stream_head, HttpCode, Headers}.
-	
+
 % Description: Sends a file to the browser.
 file(FilePath) ->
 	file_send(FilePath, []).
-% Description: Sends a file for download.	
+% Description: Sends a file for download.
 file(attachment, FilePath) ->
 	% get filename
 	FileName = filename:basename(FilePath),
@@ -121,11 +121,11 @@ get(body) ->
 
 host() ->
   Req#req.host.
-  
+
 socket() ->
   Req#req.socket.
-  
-socket_pid() -> 
+
+socket_pid() ->
   SocketPid.
 
 % Description: Parse QueryString
@@ -250,7 +250,7 @@ get_content_type(FileName) ->
 		".mpeg" -> "video/mpeg";
 		".mpg" -> "video/mpeg";
 		".mov" -> "video/quicktime";
-		".avi" -> "video/x-msvideo";	
+		".avi" -> "video/x-msvideo";
 		% less common last
 		".evy" -> "application/envoy";
 		".fif" -> "application/fractals";
@@ -420,7 +420,7 @@ get_content_type(FileName) ->
 clean_uri(lowercase, Uri) ->
 	string:to_lower(Uri);
 clean_uri(urldecode, Uri) ->
-	unquote(Uri);	
+	unquote(Uri);
 % ignore unexisting option
 clean_uri(_Unavailable, Uri) ->
 	Uri.
@@ -452,7 +452,7 @@ file_open_and_send(FilePath) ->
 			{error, Reason};
 		{ok, IoDevice} ->
 			% read portions
-			case file_read_and_send(IoDevice, 0) of 
+			case file_read_and_send(IoDevice, 0) of
 				{error, Reason} ->
 					file:close(IoDevice),
 					{error, Reason};

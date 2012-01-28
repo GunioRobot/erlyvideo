@@ -1,7 +1,7 @@
 package
 {
   import flash.events.Event;
-  
+
   public class VideoSourceEvent extends flash.events.Event
   {
     public static const CONNECTED:String = "CONNECTED";
@@ -12,7 +12,7 @@ package
     public static const TICK:String = "TICK";
     public static const FILE_NOT_FOUND:String = "FILE_NOT_FOUND";
     public static const FINISHED:String = "FINISHED";
-    
+
 		public var payload : Object;
 
     public function VideoSourceEvent(type:String, obj : Object = null) {
@@ -20,5 +20,5 @@ package
 			payload = obj;
     }
   }
-  
+
 }

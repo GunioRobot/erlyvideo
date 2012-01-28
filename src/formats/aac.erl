@@ -14,7 +14,7 @@ decode_config(<<ObjectType:5, 2#1111:4, FrequencyIndex:24, ChannelConfig:4, Fram
   unpack_config(ObjectType, FrequencyIndex, ChannelConfig, FrameLength);
 decode_config(<<ObjectType:5, FrequencyIndex:4, ChannelConfig:4, FrameLength:1, _DependsCore:1, _Extension:1, _/binary>>) ->
   unpack_config(ObjectType, FrequencyIndex, ChannelConfig, FrameLength).
-  
+
 unpack_config(ObjectType, Frequency, ChannelConfig, FrameLength) ->
   #aac_config{samples_per_frame = samples_per_frame(FrameLength), type = object_type(ObjectType), frequency = frequency(Frequency), channels = channels(ChannelConfig)}.
 

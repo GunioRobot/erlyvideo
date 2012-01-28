@@ -55,7 +55,7 @@ connect(#rtmp_session{socket = Socket, addr = Address} = State, AMF) ->
     rtmp_socket:send(Socket, Message#rtmp_message{type = bw_peer, body = ?RTMP_WINDOW_SIZE}),
     % rtmp_socket:send(Socket, Message#rtmp_message{type = stream_begin}),
     rtmp_socket:setopts(Socket, [{chunk_size, ?RTMP_PREF_CHUNK_SIZE}]),
-		
+
 	  [{object, PlayerInfo} | AuthInfo] = AMF#rtmp_funcall.args,
 	  _FlashVer = proplists:get_value(flashVer, PlayerInfo),
 	  _SwfUrl = proplists:get_value(swfUrl, PlayerInfo),
@@ -69,26 +69,26 @@ connect(#rtmp_session{socket = Socket, addr = Address} = State, AMF) ->
     {ok, UrlRe} = re:compile("(.*)://([^/]+)/?(.*)$"),
     {match, [_, _Proto, HostName, Path]} = re:run(ConnectUrl, UrlRe, [{capture, all, binary}]),
     Host = ems:host(HostName),
-    
+
 		NewState1 =	State#rtmp_session{player_info = PlayerInfo, host = Host, path = Path},
 
     AuthModule = ems:get_var(auth_module, Host, trusted_login),
     NewState2 = AuthModule:client_login(NewState1, AuthInfo),
 
     ems_log:access(Host, "CONNECT ~p ~s ~p ~s ~p", [Address, Host, NewState2#rtmp_session.user_id, _PageUrl, self()]),
-    
+
     AMFVersion = case lists:keyfind(objectEncoding, 1, PlayerInfo) of
       {objectEncoding, 0.0} -> 0;
       {objectEncoding, 3.0} -> 3;
-      {objectEncoding, _N} -> 
+      {objectEncoding, _N} ->
         error_logger:error_msg("Warning! Cannot work with clients, using not AMF0/AMF3 encoding.
         Assume _connection.objectEncoding = ObjectEncoding.AMF0; in your flash code is used version ~p~n", [_N]),
         throw(invalid_amf3_encoding);
       _ -> 0
     end,
-    
+
     ConnectObj = [{fmsVer, <<"FMS/3,0,1,123">>}, {capabilities, 31}],
-    StatusObj = [{level, <<"status">>}, 
+    StatusObj = [{level, <<"status">>},
                  {code, <<?NC_CONNECT_SUCCESS>>},
                  {description, <<"Connection succeeded.">>},
                  {clientid, 1716786930},
@@ -103,7 +103,7 @@ reply(#rtmp_session{socket = Socket}, AMF) ->
 
 fail(#rtmp_session{socket = Socket}, AMF) ->
   rtmp_socket:invoke(Socket, AMF#rtmp_funcall{command = '_error', type = invoke}).
-  
+
 
 
 

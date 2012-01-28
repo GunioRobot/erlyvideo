@@ -18,7 +18,7 @@
 
 start_link(Path, Type, Opts) ->
    gen_server:start_link(?MODULE, [Path, Type, Opts], []).
-   
+
 metadata(Server) ->
   gen_server:call(Server, {metadata}).
 
@@ -32,7 +32,7 @@ publish(Server, #video_frame{} = Frame) ->
 
 set_owner(Server, Owner) ->
   gen_server:call(Server, {set_owner, Owner}).
-  
+
 
 init([Name, live, Opts]) ->
   Host = proplists:get_value(host, Opts),
@@ -118,7 +118,7 @@ handle_call({set_owner, _Owner}, _From, #media_info{owner = Owner} = MediaInfo) 
 handle_call({publish, #video_frame{timestamp = TS} = Frame}, _From, #media_info{base_timestamp = undefined} = Recorder) ->
   handle_call({publish, Frame}, _From, Recorder#media_info{base_timestamp = TS});
 
-handle_call({publish, #video_frame{timestamp = TS} = Frame}, _From, 
+handle_call({publish, #video_frame{timestamp = TS} = Frame}, _From,
             #media_info{device = Device, clients = Clients, base_timestamp = BaseTS} = Recorder) ->
   % ?D({"Record",Channel#channel.type, TS - BaseTS}),
   Frame1 = Frame#video_frame{timestamp = TS - BaseTS, stream_id = 1},
@@ -169,7 +169,7 @@ handle_info({graceful}, #media_info{owner = undefined} = MediaInfo) ->
 
 handle_info({graceful}, #media_info{owner = _Owner} = MediaInfo) ->
   {noreply, MediaInfo, ?TIMEOUT};
-  
+
 handle_info({'EXIT', Owner, _Reason}, #media_info{owner = Owner, clients = Clients} = MediaInfo) when length(Clients) == 0 ->
   ?D({self(), "Owner exits", Owner}),
   {stop, normal, MediaInfo};
@@ -240,7 +240,7 @@ store_last_gop(#media_info{gop = GOP} = MediaInfo, _) when length(GOP) == 5000 -
 store_last_gop(#media_info{gop = GOP} = MediaInfo, Frame) when is_list(GOP) ->
   MediaInfo#media_info{gop = [Frame | GOP]};
 
-  
+
 store_last_gop(MediaInfo, _) ->
   MediaInfo.
 

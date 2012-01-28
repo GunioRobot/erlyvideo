@@ -31,12 +31,12 @@ module Rack
     #     All parameters are optional.
 
     class JsonSession < Cookie
-      
+
       def self.pack_session(session, secret)
         data = [session.to_json].pack("m*").strip
         "#{data}--#{generate_hmac(data, secret)}"
       end
-      
+
       def self.generate_hmac(data, secret)
         OpenSSL::HMAC.hexdigest(OpenSSL::Digest::SHA1.new, secret, data)
       end
@@ -52,7 +52,7 @@ module Rack
 
         begin
           session = ActiveSupport::JSON.decode(session_data.unpack("m*").first)
-          
+
           flash = nil
           if session["flash"] && session["flash"].is_a?(Hash)
             session_flash = session.delete("flash")
@@ -68,7 +68,7 @@ module Rack
           session["flash"] = flash if flash
 
           session
-          
+
           env["rack.session"] = session_data
         rescue
           env["rack.session"] = Hash.new
@@ -76,11 +76,11 @@ module Rack
 
         env["rack.session.options"] = @default_options.dup
       end
-      
+
       def generate_hmac(data)
         self.class.generate_hmac(data, @secret)
       end
-      
+
 
       def commit_session(env, status, headers, body)
         session_data = self.class.pack_session(env["rack.session"], @secret)

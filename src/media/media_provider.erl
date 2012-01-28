@@ -1,5 +1,5 @@
 % Server, that handle links to all opened files and streams. You should
-% go here to open file. If file is already opened, you will get cached copy. 
+% go here to open file. If file is already opened, you will get cached copy.
 
 -module(media_provider).
 -author(max@maxidoors.ru).
@@ -53,11 +53,11 @@ find(Host, Name) when is_list(Name)->
 
 find(Host, Name) ->
   gen_server:call(name(Host), {find, Name}).
-  
+
 
 entries(Host) ->
   gen_server:call(name(Host), entries).
-  
+
 remove(Host, Name) ->
   gen_server:cast(name(Host), {remove, Name}).
 
@@ -75,7 +75,7 @@ play(Host, Name, Options) ->
     {notfound, Reason} -> {notfound, Reason};
     MediaEntry -> create_player(MediaEntry, Options)
   end.
-  
+
 find_or_open(Host, Name) ->
   case find(Host, Name) of
     undefined -> open(Host, Name);
@@ -85,18 +85,18 @@ find_or_open(Host, Name) ->
 
 create_player({notfound, Reason}, _) ->
   {notfound, Reason};
-  
+
 create_player(MediaEntry, Options) ->
   gen_server:call(MediaEntry, {create_player, lists:keymerge(1, Options, [{consumer, self()}])}).
-  
-  
+
+
 
 init([Host]) ->
   process_flag(trap_exit, true),
   % error_logger:info_msg("Starting with file directory ~p~n", [Path]),
   OpenedMedia = ets:new(opened_media, [set, private, {keypos, #media_entry.name}]),
   {ok, #media_provider{opened_media = OpenedMedia, host = Host}}.
-  
+
 
 
 %%-------------------------------------------------------------------------
@@ -115,7 +115,7 @@ init([Host]) ->
 
 handle_call({find, Name}, _From, MediaProvider) ->
   {reply, find_in_cache(Name, MediaProvider), MediaProvider};
-  
+
 handle_call({open, Name}, {_Opener, _Ref}, #media_provider{host = Host} = MediaProvider) ->
   {reply, open_media_entry(detect_type(Host, Name), MediaProvider), MediaProvider};
 
@@ -125,7 +125,7 @@ handle_call({open, Name, Type}, {_Opener, _Ref}, MediaProvider) ->
 
 handle_call(entries, _From, #media_provider{opened_media = OpenedMedia} = MediaProvider) ->
   Entries = lists:map(
-    fun([Name, Handler]) -> 
+    fun([Name, Handler]) ->
       Clients = try gen_server:call(Handler, clients, 1000) of
         C when is_list(C) -> C
       catch
@@ -168,7 +168,7 @@ open_media_entry({Name, Type}, #media_provider{host = Host, opened_media = Opene
     MediaEntry ->
       MediaEntry
   end.
-  
+
 detect_type(Host, Name) ->
   detect_mpeg_ts(Host, Name).
 
@@ -193,12 +193,12 @@ detect_prefixed_file(Host, <<"flv:", Name/binary>>) ->
 
 detect_prefixed_file(Host, <<"mp4:", Name/binary>>) ->
   case check_path(Host, Name) of
-    true -> 
+    true ->
       ?D({"File found", Name}),
       {Name, file};
     _ -> {Name, notfound}
   end;
-  
+
 detect_prefixed_file(_Host, Name) ->
   {Name, notfound}.
 
@@ -238,7 +238,7 @@ handle_cast(_Msg, State) ->
 %%-------------------------------------------------------------------------
 handle_info({'EXIT', Media, _Reason}, #media_provider{opened_media = OpenedMedia} = MediaProvider) ->
   case ets:match(OpenedMedia, #media_entry{name = '$1', handler = Media}) of
-    [] -> 
+    [] ->
       {noreply, MediaProvider};
     [[Name]] ->
       ets:delete(OpenedMedia, Name),

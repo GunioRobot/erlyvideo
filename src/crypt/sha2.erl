@@ -24,7 +24,7 @@
 %%% 3. Neither the name of the copyright holder nor the names of contributors
 %%%    may be used to endorse or promote products derived from this software
 %%%    without specific prior written permission.
-%%% 
+%%%
 %%% THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTOR(S) ``AS IS'' AND
 %%% ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 %%% IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -85,12 +85,12 @@
                16#3956C25BF348B538:64/big-unsigned, 16#59F111F1B605D019:64/big-unsigned,
                16#923F82A4AF194F9B:64/big-unsigned, 16#AB1C5ED5DA6D8118:64/big-unsigned,
                16#D807AA98A3030242:64/big-unsigned, 16#12835B0145706FBE:64/big-unsigned,
-               16#243185BE4EE4B28C:64/big-unsigned, 16#550C7DC3D5FFB4E2:64/big-unsigned, 
+               16#243185BE4EE4B28C:64/big-unsigned, 16#550C7DC3D5FFB4E2:64/big-unsigned,
                16#72BE5D74F27B896F:64/big-unsigned, 16#80DEB1FE3B1696B1:64/big-unsigned,
                16#9BDC06A725C71235:64/big-unsigned, 16#C19BF174CF692694:64/big-unsigned,
                16#E49B69C19EF14AD2:64/big-unsigned, 16#EFBE4786384F25E3:64/big-unsigned,
                16#0FC19DC68B8CD5B5:64/big-unsigned, 16#240CA1CC77AC9C65:64/big-unsigned,
-               16#2DE92C6F592B0275:64/big-unsigned, 16#4A7484AA6EA6E483:64/big-unsigned, 
+               16#2DE92C6F592B0275:64/big-unsigned, 16#4A7484AA6EA6E483:64/big-unsigned,
                16#5CB0A9DCBD41FBD4:64/big-unsigned, 16#76F988DA831153B5:64/big-unsigned,
                16#983E5152EE66DFAB:64/big-unsigned, 16#A831C66D2DB43210:64/big-unsigned,
                16#B00327C898FB213F:64/big-unsigned, 16#BF597FC7BEEF0EE4:64/big-unsigned,
@@ -181,7 +181,7 @@ digest_bin(M, Hashes, Bit_len, Pad, Sha, Word_size) ->
 digest_str(Str, Hashes, Bit_len, Pad, Sha, Io_fmt) ->
     M = list_to_binary(Str),
     lists:flatten([io_lib:format(Io_fmt, [V]) || V <- Sha(split_binary(Pad(M), Bit_len), Hashes)]).
-    
+
 
 rotate32(V, Count) ->
     Rest = 32 - Count,
@@ -318,7 +318,7 @@ sha384({M, T}, Hashes) ->
 %%% 3. Neither the name of the copyright holder nor the names of contributors
 %%%    may be used to endorse or promote products derived from this software
 %%%    without specific prior written permission.
-%%% 
+%%%
 %%% THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTOR(S) ``AS IS'' AND
 %%% ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 %%% IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE

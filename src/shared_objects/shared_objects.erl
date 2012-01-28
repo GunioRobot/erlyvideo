@@ -10,12 +10,12 @@
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
          code_change/3]).
-         
+
 -export([open/3]).
-         
+
 -record(shared_objects, {
   objects
-}).         
+}).
 
 
 %%--------------------------------------------------------------------
@@ -50,12 +50,12 @@ init([]) ->
   case lists:member(shared_objects, mnesia:system_info(tables)) of
     true -> ok;
     _ -> {atomic, ok} = mnesia:create_table(shared_object, [{attributes, record_info(fields, shared_object)}, {disc_copies, [node()]}])
-    % 
+    %
   end,
-  
+
   Objects = ets:new(shared_object_names, [set]),
   {ok, #shared_objects{objects = Objects}}.
-  
+
 
 %%-------------------------------------------------------------------------
 %% @spec (Request, From, State) -> {reply, Reply, State}          |
@@ -73,7 +73,7 @@ init([]) ->
 handle_call({open, Host, Name, Persistent}, _From, #shared_objects{objects = Objects} = State) ->
   case ets:lookup(Objects, {Host, Name}) of
     [{{Host, Name}, Object}] -> ok;
-    _ -> 
+    _ ->
       {ok, Object} = ems_sup:start_shared_object(Host, Name, Persistent),
       link(Object),
       ets:insert(Objects, {{Host, Name}, Object})
@@ -105,13 +105,13 @@ handle_cast(_Msg, State) ->
 %% @end
 %% @private
 %%-------------------------------------------------------------------------
-% 
+%
 
 handle_info({'EXIT', Object, _Reason}, #shared_objects{objects = Objects} = State) ->
   ets:match_delete(Objects, {'_', Object}),
   ?D({"Died linked process", Object, _Reason}),
   {noreply, State};
-  
+
 
 handle_info(_Info, State) ->
   ?D({"Unknown message", _Info}),

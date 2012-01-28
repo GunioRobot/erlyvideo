@@ -9,9 +9,9 @@
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
          code_change/3]).
-         
+
 -export([create/1, find/2]).
-         
+
 -record(rtsp_sessions, {
   session_id = 42, % Just random start number
   sessions
@@ -52,7 +52,7 @@ init([]) ->
   random:seed(now()),
   Sessions = ets:new(rtsp_sessions, [set]),
   {ok, #rtsp_sessions{sessions = Sessions}}.
-  
+
 
 %%-------------------------------------------------------------------------
 %% @spec (Request, From, State) -> {reply, Reply, State}          |
@@ -72,7 +72,7 @@ handle_call({create, IP}, _From, #rtsp_sessions{sessions = Sessions, session_id 
   link(RTSP),
   ets:insert(Sessions, {{SessionID, IP}, RTSP}),
   {reply, {ok, RTSP, SessionID}, State#rtsp_sessions{session_id = SessionID + 1}};
-  
+
 
 handle_call({find, SessionID, IP}, _From, #rtsp_sessions{sessions = Sessions} = State) ->
   case ets:lookup(Sessions, {SessionID, IP}) of
@@ -105,12 +105,12 @@ handle_cast(_Msg, State) ->
 %% @end
 %% @private
 %%-------------------------------------------------------------------------
-% 
+%
 
 handle_info({'EXIT', RTMPT, _Reason}, #rtsp_sessions{sessions = Sessions} = State) ->
   ets:match_delete(Sessions, {'_', RTMPT}),
   {noreply, State};
-  
+
 
 handle_info(_Info, State) ->
   io:format("[RTSP Sessions] Unknown message: ~p", [_Info]),

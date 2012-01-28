@@ -12,7 +12,7 @@ package
   import flash.events.Event;
 	import VideoSourceEvent;
 	import mx.core.Application;
-	
+
 	public class VideoSource extends EventDispatcher
 	{
 		private static var instance:VideoSource;
@@ -20,7 +20,7 @@ package
 		public var delay : int = 10000;
 		public var connection:NetConnection;
 		public var connected : Boolean = false;
-		
+
 		public static function get source():VideoSource
 		{
 			if (!instance) {
@@ -28,13 +28,13 @@ package
 			}
 			return instance;
 		}
-		
+
 		public function VideoSource():void
 		{
 			_connectTimer = new Timer(delay, 1);
 			_connectTimer.addEventListener(TimerEvent.TIMER, connect);
 		}
-		
+
 		public function connect(e:Event = null) : void
 		{
 			connection = new NetConnection();

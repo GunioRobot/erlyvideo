@@ -28,7 +28,7 @@ init({InFileName, OutFileName}) ->
   Encoder1 = #encoder{in_file_name = InFileName, out_file_name = OutFileName},
   Encoder2 = run_encoder(Encoder1, "1"),
   {ok, first_pass, Encoder2}.
-  
+
 
 
 audio_codec("1") -> "acodec=none";
@@ -39,15 +39,15 @@ run_encoder(#encoder{in_file_name = InFileName, out_file_name = OutFileName} = E
     Pass++",stats="++ OutFileName++".log}",
   Output = ":std{access=file,mux=mp4,dst="++OutFileName++"}",
   VBitRate = "1024",
-  
+
   Args = ["vlc ", InFileName, " --sout='#transcode{venc="++X264++",vcodec=h264,vb="++VBitRate++",scale=1,"++audio_codec(Pass)++"}"++ Output++"'", " -I", " dummy", " vlc://quit"],
   Cmd = lists:append(Args),
-  
+
   Port = open_port({spawn, Cmd}, [stream, {line, 1000}, exit_status, binary, stderr_to_stdout, eof]),
   ?D("Running VLC pass "++Pass),
   Encoder#encoder{port = Port}.
-  
-  
+
+
 first_pass(Event, State) ->
   ?D({"First pass", Event, State}),
   {next_state, first_pass, State}.
@@ -56,7 +56,7 @@ second_pass(Event, State) ->
   ?D({"Second pass", Event, State}),
   {next_state, second_pass, State}.
 
-  
+
 handle_event(Event, StateName, StateData) ->
   ?D({"Unknown event in player", Event, StateName}),
     {stop, {StateName, undefined_event, Event}, StateData}.
@@ -91,7 +91,7 @@ handle_info({Port, {data, {eol, String}}}, StateName, #encoder{port = Port} = En
   % ?D({"Status message", Status})
   io:format("~p~n", [binary_to_list(String)]),
   {next_state, StateName, Encoder};
-  
+
 handle_info({_Port, eof}, StateName, Encoder) ->
   ?D({"VLC closed while", StateName}),
   {next_state, StateName, Encoder};
@@ -107,4 +107,3 @@ terminate(_Reason, _StateName, #encoder{port = _Port} = _State) ->
 code_change(_OldVsn, StateName, StateData, _Extra) ->
   {ok, StateName, StateData}.
 
-  

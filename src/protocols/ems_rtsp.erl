@@ -8,7 +8,7 @@
 
 -export([announce/4]).
 
-announce(Host, Path, Streams, _Headers) -> 
+announce(Host, Path, Streams, _Headers) ->
   Media = media_provider:open(Host, Path, live),
   Streams1 = config_media(Media, Streams),
   {ok, Media, Streams1}.
@@ -26,7 +26,7 @@ config_media(Media, [#rtsp_stream{type = video, pps = PPS, sps = SPS} = Stream |
   config_media(Media, Streams, [Stream#rtsp_stream{config = H264_2} | Output]);
 
 config_media(Media, [#rtsp_stream{type = audio, config = Config} = Stream | Streams], Output) ->
-  AudioConfig = #video_frame{       
+  AudioConfig = #video_frame{
    	type          = audio,
    	decoder_config = true,
 		timestamp      = 0,

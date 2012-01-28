@@ -13,7 +13,7 @@ package
 	import flash.media.Camera;
 	import flash.media.Microphone;
 	import flash.media.SoundCodec;
-	
+
 	import mx.controls.Alert;
 	public class VideoStream extends EventDispatcher
 	{
@@ -24,13 +24,13 @@ package
 		public var height : int;
 		public var totalTime : int;
 		private var statusTimer : Timer;
-		
+
 		public var recording : Boolean = false;
 		public var paused : Boolean = false;
-		
+
 		private static var number : int = 0;
 		public var id : int;
-		
+
 		public function VideoStream(s:VideoSource):void
 		{
 			_source = s;
@@ -44,7 +44,7 @@ package
 				onConnect(null);
 			}
 		}
-		
+
 		public function onConnect(event : VideoSourceEvent) : void
 		{
 	  	var listener : Object = new Object();
@@ -57,7 +57,7 @@ package
 
 			dispatchEvent(new VideoSourceEvent(VideoSourceEvent.STREAM_READY));
 		}
-		
+
 		public function onDisconnect(event : Object) : void
 		{
 			stop();
@@ -65,14 +65,14 @@ package
 			_stream = null;
 			dispatchEvent(new VideoSourceEvent(VideoSourceEvent.STREAM_FAILED));
 		}
-		
+
 		public function close() : void
 		{
 		  if (_stream) {
 		    _stream.close();
 		  }
 		}
-		
+
 		public function get time():int
 		{
 			if (_stream) return _stream.time;
@@ -91,7 +91,7 @@ package
 			paused = false;
 			statusTimer.stop();
 		}
-		
+
 		public function play(url : String, video : Video) : Boolean {
 			if (!_stream) {
 				return false;
@@ -102,7 +102,7 @@ package
 			_stream.play(url);
 			return true
 		}
-		
+
 		public function pause() : Boolean
 		{
 			if (_stream) {
@@ -124,12 +124,12 @@ package
 				statusTimer.start();
 			}
 		}
-		
+
 		public function startSeek() : void
 		{
 			statusTimer.stop();
 		}
-		
+
 		public function seek(time:int):void
 		{
 			if (_stream && Math.abs(_stream.time - time) >= 1) {
@@ -137,13 +137,13 @@ package
 		    _stream.seek(time);
 		  }
 		}
-		
+
 		public function record(url : String, playback : Video) : Boolean
 		{
 			if (!_stream) {
 				return false;
 			}
-			
+
 	  	var camera : Camera = Camera.getCamera();
 		  camera.setMode(320,240,20, false);
 		  camera.setQuality(0, 90);
@@ -157,18 +157,18 @@ package
 		  microphone.setUseEchoSuppression(true);
 
 		  _stream.publish(url, "record");
-		
+
 			if (playback) {
 				playback.attachCamera(camera);
 			}
-			
+
 			_stream.attachCamera(camera);
 			_stream.attachAudio(microphone);
-			
+
 			recording = true;
 			return true;
 		}
-		
+
 		private function progressTick(event:TimerEvent) : void {
 			if (_stream) {
 				dispatchEvent(new VideoSourceEvent(VideoSourceEvent.TICK, _stream.time));
@@ -176,7 +176,7 @@ package
 				statusTimer.stop();
 			}
 		}
-		
+
 		public function set volume(vol : Number) : void
 		{
 			if (_stream) {
@@ -184,7 +184,7 @@ package
 			  _stream.soundTransform = sound;
 			}
 		}
-		
+
 		private function onStreamStatus( event : NetStatusEvent ) : void
 		{
 			switch(event.info.code){
@@ -204,8 +204,8 @@ package
 		  }
 
 		}
-		
-		
+
+
 		private function onMetaData(metadata : Object) : void
 		{
 		  width = metadata.width;
@@ -214,6 +214,6 @@ package
 			dispatchEvent(new VideoSourceEvent(VideoSourceEvent.METADATA, metadata));
 		}
 
-		
+
 	}
 }

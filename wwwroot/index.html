@@ -12,18 +12,18 @@
   <body>
     <script type="text/javascript">
     netconnection = {};
-    
+
     netconnection.message = function(message) {
       $("#chat").append("<div>"+message+"</div>");
     }
     </script>
     <div class="container">
       <div class="span-24 last">
-        <h3 style="float: left; margin-right: 2em"><a href="/admin">Admin</a></h3> 
+        <h3 style="float: left; margin-right: 2em"><a href="/admin">Admin</a></h3>
         <h3 style="float: left; margin-right: 2em"><a href="/chat.html">Chat</a></h3>
         <h3 style="float: left; margin-right: 2em"><a href="/longtail/index.html">JWV Player</a></h3>
       </div>
-      
+
       <div class="span-18">
         <object width="700" height="630" type="application/x-shockwave-flash" id="flash-program-player" name="flash-program-player" data="player/Player.swf">
           <param name="allowScriptAccess" value="always"/>
@@ -34,12 +34,12 @@
         <div class="span-14 last">
           <a href="?file={{live_id}}">New live broadcast</a>
         </div>
-          
+
       </div>
       <div class="span-6 last">
         <h3>Chat</h3>
         <div id="chat" style="height: 300px; overflow: scroll">
-          
+
         </div>
         <form action="/channels/10/message" method="post" onsubmit="try {var self = $(this); var postData = self.serialize(); self.find('input').attr('disabled', true); $.post(this.action, postData, function() {self.find('input[type=text]').val(''); self.find('input').attr('disabled', false);}, 'text'); } catch(e) { alert(e);}; return false">
           <input type="text" name="message">
@@ -50,7 +50,7 @@
           <li><a href="?file={{file}}&autostart=true">{{file}}</a></li>
           {% endfor %}
         </ul>
-        
+
       </div>
     </div>
   </body>

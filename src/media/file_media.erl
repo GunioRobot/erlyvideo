@@ -20,7 +20,7 @@ start_link(Path, Type, Opts) ->
 
 
 codec_config(MediaEntry, Type) -> gen_server:call(MediaEntry, {codec_config, Type}).
-   
+
 read_frame(MediaEntry, Key) -> gen_server:call(MediaEntry, {read, Key}).
 
 name(Server) ->
@@ -87,7 +87,7 @@ handle_call({read, Key}, _From, #media_info{frames = FrameTable, format = FileFo
 
 handle_call({name}, _From, #media_info{name = FileName} = MediaInfo) ->
   {reply, FileName, MediaInfo};
-  
+
 handle_call({seek, Timestamp}, _From, #media_info{frames = FrameTable} = MediaInfo) ->
   TimestampInt = round(Timestamp),
   Ids = ets:select(FrameTable, ets:fun2ms(fun(#file_frame{id = Id,timestamp = FrameTimestamp, keyframe = true} = _Frame) when FrameTimestamp =< TimestampInt ->
@@ -144,7 +144,7 @@ handle_info({graceful}, #media_info{owner = undefined, name = FileName, clients 
 
 handle_info({graceful}, #media_info{owner = _Owner} = MediaInfo) ->
   {noreply, MediaInfo};
-  
+
 handle_info({'EXIT', Owner, _Reason}, #media_info{owner = Owner, clients = Clients} = MediaInfo) ->
   case ets:info(Clients, size) of
     0 -> timer:send_after(?FILE_CACHE_TIME, {graceful});
@@ -161,7 +161,7 @@ handle_info({'EXIT', Client, _Reason}, #media_info{clients = Clients, name = Fil
   end,
   {noreply, MediaInfo};
 
-  
+
 handle_info(_Info, State) ->
   ?D({"Undefined info", _Info}),
   {noreply, State}.
@@ -189,9 +189,9 @@ code_change(_OldVsn, State, _Extra) ->
 
 open_file(Name, Host) when is_binary(Name) ->
   open_file(binary_to_list(Name), Host);
-  
+
 open_file(Name, Host) ->
-  FileName = filename:join([file_play:file_dir(Host), Name]), 
+  FileName = filename:join([file_play:file_dir(Host), Name]),
 	{ok, Device} = file:open(FileName, [read, binary, {read_ahead, 100000}]),
 	FileFormat = file_play:file_format(FileName),
 	MediaInfo = #media_info{
@@ -200,9 +200,9 @@ open_file(Name, Host) ->
     format = FileFormat
 	},
 	case FileFormat:init(MediaInfo) of
-		{ok, MediaInfo1} -> 
+		{ok, MediaInfo1} ->
 		  {ok, MediaInfo1};
-    _HdrError -> 
+    _HdrError ->
 		  ?D(_HdrError),
 		  {error, "Invalid header", _HdrError}
 	end.

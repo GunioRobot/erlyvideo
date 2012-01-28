@@ -37,11 +37,11 @@
 -behaviour(gen_format).
 
 
-init(#video_player{header = undefined} = Player) -> 
+init(#video_player{header = undefined} = Player) ->
   % init(Player#video_player{frames = ets:new(frames, [ordered_set, {keypos, 2}])});
 
 
-% init(#video_player{frames = _FrameTable} = Player) -> 
+% init(#video_player{frames = _FrameTable} = Player) ->
   read_element(Player#video_player{pos = 0}),
   {ok, Player}.
 
@@ -52,7 +52,7 @@ read_frame(#video_player{pos = '$end_of_table'}) ->
 
 read_frame(#video_player{pos = undefined, frames = FrameTable} = Player) ->
   read_frame(Player#video_player{pos = ets:first(FrameTable)});
-  
+
 read_frame(#video_player{}) ->
   {ok, done}.
 
@@ -78,7 +78,7 @@ match_int(#video_player{pos = Pos, device = IoDev}, Bytes) ->
   <<WholeInt:ByteSize/big-integer>> = BData,
   ?D({"Int", Int, WholeInt}),
   {ok, Int, Bytes}.
-  
+
 bits_offset(<<1:1, _/bits>>)      -> 1;
 bits_offset(<<0:1, 1:1, _/bits>>) -> 2;
 bits_offset(<<0:2, 1:1, _/bits>>) -> 3;
@@ -87,7 +87,7 @@ bits_offset(<<0:4, 1:1, _/bits>>) -> 5;
 bits_offset(<<0:5, 1:1, _/bits>>) -> 6;
 bits_offset(<<0:6, 1:1, _/bits>>) -> 7;
 bits_offset(<<0:7, 1:1>>)         -> 8.
-  
+
 decode_int(Player, <<1:1, Int:7>>) -> {ok, Int, 1};
 decode_int(Player, Data) -> match_int(Player, bits_offset(Data)).
 
@@ -100,7 +100,7 @@ next_int(#video_player{pos = Pos, device = IoDev} = Player) ->
 
 class_id(#video_player{pos = Pos, device = IoDev} = Player) ->
   case file:pread(IoDev, Pos, 1) of
-    {ok, Data} -> 
+    {ok, Data} ->
       Bytes = bits_offset(iolist_to_binary(Data)),
       BitSize = Bytes*8,
       {ok, ClassIdData} = file:pread(IoDev, Pos, Bytes),

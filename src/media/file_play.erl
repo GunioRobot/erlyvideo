@@ -72,17 +72,17 @@ start_link(MediaEntry) -> start_link(MediaEntry, []).
 
 start_link(MediaEntry, Options) ->
   {ok, spawn_link(?MODULE, init, [MediaEntry, Options])}.
-  
+
 client(Player) ->
   Ref = erlang:make_ref(),
   Player ! {client, self(), Ref},
-  receive 
+  receive
     {Info, Ref} -> Info
   after 1000 ->
     {undefined, undefined, Player}
   end.
 
-  
+
 init(MediaEntry, Options) ->
   Consumer = proplists:get_value(consumer, Options),
   link(Consumer),
@@ -92,17 +92,17 @@ init(MediaEntry, Options) ->
                       media_info = MediaEntry,
                       client_buffer = proplists:get_value(client_buffer, Options, 10000),
                       timer_start = erlang:now()}).
-  
-	
-ready(#file_player{media_info = MediaInfo, 
-                    consumer = Consumer, 
+
+
+ready(#file_player{media_info = MediaInfo,
+                    consumer = Consumer,
                     client_buffer = ClientBuffer,
                     stream_id = StreamId,
                     timer_ref = Timer} = State) ->
   receive
-    {client_buffer, ClientBuffer} -> 
+    {client_buffer, ClientBuffer} ->
       ?MODULE:ready(State#file_player{client_buffer = ClientBuffer});
-      
+
     start ->
       case file_media:metadata(MediaInfo) of
         undefined -> ok;
@@ -110,11 +110,11 @@ ready(#file_player{media_info = MediaInfo,
       end,
     	self() ! play,
       ?MODULE:ready(State#file_player{prepush = ClientBuffer, stopped = false, paused = false});
-      
+
     {client, Pid, Ref} ->
       Pid ! {gen_fsm:sync_send_event(Consumer, info), Ref},
       ?MODULE:ready(State);
-      
+
     pause ->
       ?D("Player paused"),
       timer:cancel(Timer),
@@ -124,7 +124,7 @@ ready(#file_player{media_info = MediaInfo,
       ?D("Player resumed"),
       self() ! play,
       ?MODULE:ready(State#file_player{paused = false});
-      
+
     {send_audio, Audio} ->
       ?D({"Send audio", Audio}),
       ?MODULE:ready(State#file_player{send_audio = Audio});
@@ -139,26 +139,26 @@ ready(#file_player{media_info = MediaInfo,
           timer:cancel(Timer),
           % ?D({"Player seek to", Timestamp, Pos, NewTimestamp}),
           self() ! play,
-          ?MODULE:ready(State#file_player{pos = Pos, 
-                                          ts_prev = NewTimestamp, 
-                                          playing_from = NewTimestamp, 
+          ?MODULE:ready(State#file_player{pos = Pos,
+                                          ts_prev = NewTimestamp,
+                                          playing_from = NewTimestamp,
                                           prepush = ClientBuffer});
         undefined ->
           ?D({"Seek beyong current borders"}),
           ?MODULE:ready(State)
       end;
 
-    stop -> 
+    stop ->
       ?D("Player stopping"),
       timer:cancel(Timer),
       ?MODULE:ready(State#file_player{ts_prev = 0, pos = undefined, stopped = true, playing_from = 0});
-  
+
     exit ->
       ok;
-      
+
     play ->
       play(State);
-    	
+
   	{tcp_closed, _Socket} ->
       error_logger:info_msg("~p Video player lost connection.\n", [self()]),
       ok;
@@ -182,12 +182,12 @@ play(#file_player{sent_audio_config = false, media_info = MediaInfo} = Player) -
 play(#file_player{sent_video_config = false, media_info = MediaInfo} = Player) ->
   % ?D({"Sent video config"}),
   send_frame(Player#file_player{sent_video_config = true}, file_media:codec_config(MediaInfo, video));
-    
+
 
 play(#file_player{media_info = MediaInfo, pos = Key} = Player) ->
   {Frame, Next} = file_media:read_frame(MediaInfo, Key),
   send_frame(Player#file_player{pos = Next}, Frame);
-  
+
 play(Else) ->
   ?D(Else),
   ok.
@@ -199,7 +199,7 @@ send_frame(Player, undefined) ->
 send_frame(Player, #video_frame{body = undefined}) ->
   self() ! play,
   ?MODULE:ready(Player);
-  
+
 send_frame(#file_player{}, done) ->
   ok;
 
@@ -215,7 +215,7 @@ send_frame(#file_player{consumer = Consumer, stream_id = StreamId} = Player, #vi
 %% @spec () -> FileName::string()
 %% @doc retrieves FLV video file folder from application environment
 %% @end
-%%-------------------------------------------------------------------------	
+%%-------------------------------------------------------------------------
 file_dir(Host) ->
   ems:get_var(file_dir, Host, "/tmp").
 
@@ -234,13 +234,13 @@ file_format(Name) ->
       ".MKV" -> mkv;
       _ -> flv
   end.
-  
+
 
 %%-------------------------------------------------------------------------
 %% @spec (AbsTime::integer(), TimerStart::integer(), ClientBuffer::integer()) -> [TimeOut::integer() | 0]
-%% @doc calculates timeout to playback of next FLV Tag 
+%% @doc calculates timeout to playback of next FLV Tag
 %% @end
-%%-------------------------------------------------------------------------	
+%%-------------------------------------------------------------------------
 
 timeout_play(#video_frame{timestamp = AbsTime}, #file_player{timer_start = TimerStart, client_buffer = ClientBuffer, playing_from = PlayingFrom, prepush = Prepush} = Player) ->
   SeekTime = AbsTime - PlayingFrom,
@@ -250,11 +250,11 @@ timeout_play(#video_frame{timestamp = AbsTime}, #file_player{timer_start = Timer
   (Prepush > SeekTime) ->
     self() ! play,
     Player#file_player{prepush = Prepush - SeekTime};
-	(Timeout > 0) -> 
+	(Timeout > 0) ->
     Player#file_player{timer_ref = timer:send_after(Timeout, play)};
-  true -> 
+  true ->
     self() ! play,
     Player
   end.
 
- 
+

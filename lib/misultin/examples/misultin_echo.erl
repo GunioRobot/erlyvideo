@@ -2,12 +2,12 @@
 % MISULTIN - Example: Echoes inputted GET variables into an XML.
 %
 % >-|-|-(°>
-% 
+%
 % Copyright (C) 2009, Roberto Ostinelli <roberto@ostinelli.net>
 % All rights reserved.
 %
 % BSD License
-% 
+%
 % Redistribution and use in source and binary forms, with or without modification, are permitted provided
 % that the following conditions are met:
 %
@@ -39,7 +39,7 @@ stop() ->
 	misultin:stop().
 
 % callback on request received
-handle_http(Req) ->	
+handle_http(Req) ->
 	% get params depending on method
 	Method = Req:get(method),
 	case Method of

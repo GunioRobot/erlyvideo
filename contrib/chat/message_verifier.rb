@@ -40,7 +40,7 @@ module ActiveSupport
       # raise InvalidSignature
       {}
     end
-    
+
     def generate(value)
       data = ActiveSupport::Base64.encode64s(value.to_json)
       "#{data}--#{generate_digest(data)}"

@@ -23,13 +23,13 @@ decode(Session, Secret) when is_binary(Session) ->
 
 decode(Session, Secret) when is_list(Session) ->
   decode(0, list_to_binary(Session), Secret).
-  
+
 encode(Session, Secret) when is_list(Session) ->
   Json = iolist_to_binary(mochijson2:encode({struct, Session})),
   Json64 = base64:encode(Json),
   Sign = session_sign(Json64, Secret),
   <<Json64/binary, "--", Sign/binary>>.
-  
+
 binary_to_hexbin(L) ->
   list_to_binary(lists:flatten(lists:map(fun(X) -> int_to_hex(X) end, binary_to_list(L)))).
 
@@ -40,10 +40,10 @@ hex(N) when N < 10 ->
   $0+N;
 hex(N) when N >= 10, N < 16 ->
   $a + (N-10).
-  
+
 session_sign(Session, Secret) ->
   binary_to_hexbin(crypto:sha_mac(Secret, Session)).
-  
+
 decode(Offset, Subscription, _Secret) when Offset >= size(Subscription) - 2 ->
   {error};
 

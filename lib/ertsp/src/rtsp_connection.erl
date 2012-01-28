@@ -53,8 +53,8 @@ start_link(Callback) ->
   'Accept', 'Accept-Encoding', 'Accept-Language', 'Allow', 'Authorization', 'Bandwidth',
   'Blocksize', 'Cache-Control', 'ClientChallenge', 'Conference', 'Connection', 'Content-Base', 'Content-Encoding',
   'Content-Language', 'Content-Length', 'Content-Location', 'Content-Type', 'Cseq',
-  'Date', 'Expires', 'From', 'Host', 'If-Match', 'If-Modiﬁed-Since', 'Last-Modiﬁed', 
-  'Location', 'Proxy-Authenticate', 'Proxy-Require', 'Public', 'Range', 
+  'Date', 'Expires', 'From', 'Host', 'If-Match', 'If-Modiﬁed-Since', 'Last-Modiﬁed',
+  'Location', 'Proxy-Authenticate', 'Proxy-Require', 'Public', 'Range',
   'Referer', 'Retry-After', 'Require', 'RTP-Info', 'Scale', 'Speed', 'Server',
   'Session', 'Timestamp', 'Transport', 'Unsupported', 'User-Agent', 'Vary', 'Via',
   'WWW-Authenticate',
@@ -101,7 +101,7 @@ init([Callback]) ->
 
 'WAIT_FOR_REQUEST'({data, <<>>}, State) ->
   {next_state, 'WAIT_FOR_REQUEST', State};
-  
+
 'WAIT_FOR_REQUEST'({data, Request}, #rtsp_connection{socket = Socket, url_re = UrlRe, request_re = RequestRe} = State) ->
   {match, [_, Method, URL, <<"RTSP">>, <<"1.0">>]} = re:run(Request, RequestRe, [{capture, all, binary}]),
   MethodName = binary_to_existing_atom(Method, utf8),
@@ -172,7 +172,7 @@ init([Callback]) ->
   State1 = handle_request(State),
   inet:setopts(Socket, [{active, once}]),
   {next_state, 'WAIT_FOR_REQUEST', State1};
-  
+
 
 'WAIT_FOR_HEADERS'(end_of_headers, #rtsp_connection{socket = Socket} = State) ->
   inet:setopts(Socket, [{packet, line}, {active, once}]),
@@ -211,7 +211,7 @@ init([Callback]) ->
 handle_request(#rtsp_connection{request = [_Method, _URL], body = Body} = State) ->
   State1 = run_request(State#rtsp_connection{body = lists:reverse(Body)}),
   State1#rtsp_connection{request = undefined, content_length = undefined, headers = [], body = [], bytes_read = 0}.
-  
+
 
 run_request(#rtsp_connection{request = ['ANNOUNCE', _URL], host = Host, body = Body, callback = Callback, headers = Headers} = State) ->
   Path = path(State),
@@ -221,7 +221,7 @@ run_request(#rtsp_connection{request = ['ANNOUNCE', _URL], host = Host, body = B
     {error, not_authed} -> reply(State, "401 Authorization Required", []);
     {error, Reason} -> reply(State, "500 Server error", [])
   end;
-  
+
 
 run_request(#rtsp_connection{request = ['OPTIONS', _URL]} = State) ->
   reply(State, "200 OK", [{'Public', "SETUP, TEARDOWN, PLAY, PAUSE, RECORD, OPTIONS, DESCRIBE"}]);
@@ -243,25 +243,25 @@ run_request(#rtsp_connection{request = ['SETUP', URL], headers = Headers, stream
   {match, [_, HostPort, _Path, TrackIdS]} = re:run(URL, Re, [{capture, all, list}]),
   TrackId = list_to_integer(TrackIdS),
   Transport = proplists:get_value('Transport', Headers),
-  
+
   Stream = lists:keyfind(TrackId, #rtsp_stream.id, Streams),
-  
+
   [ProtoS | TransportOptsCoded] = string:tokens(binary_to_list(Transport), ";"),
   Proto = case ProtoS of
     "RTP/AVP" -> udp;
     "RTP/AVP/TCP" -> tcp
   end,
-  
-  TransportOpts = lists:map(fun(S) -> 
+
+  TransportOpts = lists:map(fun(S) ->
     case string:tokens(S, "=") of
     [Key, Value] -> {Key, Value};
     [Key] -> {Key, true}
   end end, TransportOptsCoded),
 
   Date = httpd_util:rfc1123_date(),
-  
+
   State1 = case Proto of
-    udp -> 
+    udp ->
       {ok, _Listener, {RTP, RTCP}} = rtsp_sup:start_rtp_server(Media, Stream),
       HostName = hd(string:tokens(HostPort, ":")),
       {ok, {hostent, _, _, inet, _, [HostAddr | _]}} = inet:gethostbyname(HostName),
@@ -284,15 +284,15 @@ run_request(#rtsp_connection{request = ['SETUP', URL], headers = Headers, stream
 
 run_request(#rtsp_connection{request = [_Method, _URL]} = State) ->
   reply(State, "200 OK", []).
-  
+
 
 decode_line(Message, #rtsp_connection{rtsp_re = RtspRe, body = Body} = State) ->
   {match, [_, Key, Value]} = re:run(Message, RtspRe, [{capture, all, binary}]),
   io:format("[RTSP]  ~s: ~s~n", [Key, Value]),
   State#rtsp_connection{body = [{Key, Value} | Body]}.
 
-  
-  
+
+
 
 reply(#rtsp_connection{socket = Socket, sequence = Sequence, session_id = SessionId} = State, Code, Headers) ->
   Headers1 = [{'Cseq', Sequence} | Headers],
@@ -305,7 +305,7 @@ reply(#rtsp_connection{socket = Socket, sequence = Sequence, session_id = Sessio
   io:format("[RTSP] ~s", [Reply]),
   gen_tcp:send(Socket, Reply),
   State.
-  
+
 binarize_header({Key, Value}) when is_atom(Key) ->
   binarize_header({atom_to_binary(Key, latin1), Value});
 
@@ -314,19 +314,19 @@ binarize_header({Key, Value}) when is_list(Key) ->
 
 binarize_header({Key, Value}) when is_integer(Value) ->
   binarize_header({Key, integer_to_list(Value)});
-  
+
 binarize_header({Key, Value}) ->
   [Key, <<": ">>, Value, <<"\r\n">>];
 
 binarize_header([Key, Value]) ->
   [Key, <<" ">>, Value, <<"\r\n">>].
-  
-  
+
+
 path(#rtsp_connection{url_re = UrlRe, request = [_, URL]}) ->
   {match, [_, _Host, Path]} = re:run(URL, UrlRe, [{capture, all, binary}]),
   Path.
-  
-  
+
+
 
 %%-------------------------------------------------------------------------
 %% Func: handle_event/3
@@ -362,7 +362,7 @@ handle_sync_event(Event, _From, StateName, StateData) ->
 %%-------------------------------------------------------------------------
 handle_info({tcp, _Socket, Bin}, 'WAIT_FOR_HEADERS' = StateName, State) ->
   case erlang:decode_packet(httph_bin, <<Bin/binary, "pad">>, []) of
-    {ok, {http_header, _, Name, _, Value}, <<"pad">>} -> 
+    {ok, {http_header, _, Name, _, Value}, <<"pad">>} ->
       Key = case Name of
         _ when is_binary(Name) -> binary_to_existing_atom(Name, utf8);
         _ when is_atom(Name) -> Name
@@ -376,7 +376,7 @@ handle_info({tcp, _Socket, Bin}, StateName, State) ->
 
 % handle_info({http, _Socket, {http_header, _, Name, _, Value}}, StateName, State) ->
 %   ?MODULE:StateName({header, Name, Value}, State);
-% 
+%
 % handle_info({http, _Socket, http_eoh}, StateName, State) ->
 %   ?MODULE:StateName(end_of_headers, State);
 

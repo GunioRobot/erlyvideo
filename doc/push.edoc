@@ -1,12 +1,12 @@
 @author     Max Lapshin <max@maxidoors.ru> [http://maxidoors.ru]
 @copyright  2009 Max Lapshin
 @reference  See <a href="http://erlyvideo.org/" target="_top">http://erlyvideo.org/</a> for more information
-@version 
+@version
 @title Push channel in ErlyVideo
 @doc Erlyvideo provides push channel from server to connected clients.
 
 Sometimes it is better to use comet-like solutions with long-poll for push channel, but sometimes it is impossible,
-because long-poll sometimes hang browser and it is incompatible with video, playing in browser. Also, cross-domain 
+because long-poll sometimes hang browser and it is incompatible with video, playing in browser. Also, cross-domain
 long-poll is very, very hard to implement correctly.
 
 Erlyvideo has builtin support for this. It uses RTMP channel to push data back to client.
@@ -27,7 +27,7 @@ b) eyJjaGFubmVscyI6WzEwLDEyXSwidXNlcl9pZCI6NX0=
 c) 53a54957765ca65ee52ce727fdf70b95e6972f45
 d) eyJjaGFubmVscyI6WzEwLDEyXSwidXNlcl9pZCI6NX0=--53a54957765ca65ee52ce727fdf70b95e6972f45
 
-  
+
 If you use Ruby on Rails, than you can take my code, that makes rails session interoperable between servers: http://gist.github.com/141303
 Mention, that you can create such session specially for erlyvideo, without affecting usual session. However, you must pass it to push flash.
 
